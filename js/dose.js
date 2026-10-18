@@ -4,6 +4,10 @@
 // 「의약품 권장 용량 및 투입주기 등의 결정 보조」를 의료기기 목적으로 적고 있어, 기록(먹인 때 · 횟수)과 포장 설명서
 // 내용(일반 범위)을 나란히 보여 주는 데서 멈춘다. 먹여도 되는지는 보호자가 설명서 · 의사 · 약사와 정한다.
 // 체중 · 나이로 셈하던 판(0.6.1)은 git 09bbd73 에 있다. 이 파일의 값을 바꾸면 시험도 함께 고친다.
+// 이름 · 설명서 문구는 한국어로 두고 화면에서 t() 로 바꾼다 — 영어 뜻(js/en.js)에 숫자가 따라 들어가니 값을 바꾸면 거기도
+// (시험 「영어」가 빠진 것을 잡는다).
+
+import { t } from './i18n.js';
 
 export const HOUR = 3600_000;
 export const DAY = 24 * HOUR;
@@ -96,10 +100,10 @@ export const LEVELS = [
 export const FEVER_AT = 38.0;
 
 export function feverLevel(temp) {
-  const t = Number(temp);
-  if (!Number.isFinite(t)) return null;
+  const v = Number(temp);
+  if (!Number.isFinite(v)) return null;
   let found = LEVELS[0];
-  for (const level of LEVELS) if (t >= level.min - 1e-9) found = level;
+  for (const level of LEVELS) if (v >= level.min - 1e-9) found = level;
   return found;
 }
 
@@ -121,16 +125,17 @@ export function ageMonths(birth, now = new Date()) {
 
 export function ageLabel(months) {
   if (months === null || months === undefined) return '';
-  if (months < 24) return `${months}개월`;
-  return `${Math.floor(months / 12)}세${months % 12 ? ` ${months % 12}개월` : ''}`;
+  if (months < 24) return t('{m}개월', { m: months });
+  const y = Math.floor(months / 12);
+  return months % 12 ? t('{y}세 {m}개월', { y, m: months % 12 }) : t('{y}세', { y });
 }
 
 export function ageNotice(ingredientId, months) {
   const ing = INGREDIENTS[ingredientId];
   if (!ing || months === null || months === undefined) return '';
-  if (months < 3) return '생후 3개월 미만은 해열제보다 진료가 먼저입니다. 열이 나면 바로 병원에 가세요.';
+  if (months < 3) return t('생후 3개월 미만은 해열제보다 진료가 먼저입니다. 열이 나면 바로 병원에 가세요.');
   if (months < ing.minAgeMonths) {
-    return `${ing.name}은(는) 보통 생후 ${ing.minAgeMonths}개월부터 먹입니다. 그 전에는 의사와 상의하세요.`;
+    return t('{name}은(는) 보통 생후 {m}개월부터 먹입니다. 그 전에는 의사와 상의하세요.', { name: t(ing.name), m: ing.minAgeMonths });
   }
   return '';
 }
@@ -142,18 +147,20 @@ function medsOf(history, before = null) {
     .sort((a, b) => ms(a.at) - ms(b.at));
 }
 
+const FEVER_TIP = '물을 자주 먹이세요. 해열제는 열을 내리려는 것이 아니라 아이가 힘들어할 때 편하게 해 주려고 먹여요. 처지거나 잘 깨지 않으면 '
+  + '해열제보다 진료가 먼저예요. 해열제를 먹였다면 1시간쯤 뒤 다시 재 보세요. 숫자보다 아이의 상태가 더 중요해요.';
+
 /** 지금 체온에 맞춘 한 줄 안내 — 처방이 아니라 집에서 살필 것. */
 export function careTip(temp) {
   const lv = feverLevel(temp);
   if (!lv) return '';
   switch (lv.key) {
-    case 'low': return '체온이 낮게 나왔어요. 몸을 따뜻하게 하고 다시 재 보세요.';
-    case 'normal': return '열이 없어요. 잘 먹고 노는지 아이 상태를 함께 살펴 주세요.';
+    case 'low': return t('체온이 낮게 나왔어요. 몸을 따뜻하게 하고 다시 재 보세요.');
+    case 'normal': return t('열이 없어요. 잘 먹고 노는지 아이 상태를 함께 살펴 주세요.');
     // 너무 껴입히지도 벗기지도 않는다 · 미지근한 물로 닦지 않는다(NICE NG143 1.6.2~1.6.3)
-    case 'mild': return '너무 껴입히지도 벗기지도 말고 물을 자주 먹이세요. 1~2시간 뒤 다시 재 보세요.';
+    case 'mild': return t('너무 껴입히지도 벗기지도 말고 물을 자주 먹이세요. 1~2시간 뒤 다시 재 보세요.');
     // 해열제는 열을 내리려고가 아니라 아이가 힘들어할 때(NICE 1.6.4 · AAP 2011). 처짐 · 잘 안 깸은 진료가 먼저(NICE 1.2.5~1.2.6)
-    default: return '물을 자주 먹이세요. 해열제는 열을 내리려는 것이 아니라 아이가 힘들어할 때 편하게 해 주려고 먹여요. 처지거나 잘 깨지 않으면 '
-      + '해열제보다 진료가 먼저예요. 해열제를 먹였다면 1시간쯤 뒤 다시 재 보세요. 숫자보다 아이의 상태가 더 중요해요.';
+    default: return t(FEVER_TIP);
   }
 }
 
@@ -179,26 +186,27 @@ export function checkDose({
   if (age) raise('warn', age);
   // 제품마다 먹이는 나이가 다르다(종합감기약은 만 2세부터)
   if (medMinAgeMonths && months !== null && months !== undefined && months < medMinAgeMonths) {
-    const from = medMinAgeMonths >= 24 ? `만 ${Math.floor(medMinAgeMonths / 12)}세` : `생후 ${medMinAgeMonths}개월`;
-    raise('warn', `이 약은 포장에 ${from}부터라고 적혀 있어요. 먹이기 전에 의사 · 약사와 상의하세요.`);
+    const from = medMinAgeMonths >= 24 ? t('만 {y}세', { y: Math.floor(medMinAgeMonths / 12) }) : t('생후 {m}개월', { m: medMinAgeMonths });
+    raise('warn', t('이 약은 포장에 {from}부터라고 적혀 있어요. 먹이기 전에 의사 · 약사와 상의하세요.', { from }));
   }
 
   // 38℃ 아래에서 먹이는 일이 흔하다(열나요 사용자 자료: Park 2021 JMIR mHealth) — 한 줄만
   const lastTemp = history.filter((e) => e.type === 'temp' && ms(e.at) <= when && ms(e.at) > when - 2 * HOUR)
     .sort((a, b) => ms(b.at) - ms(a.at))[0];
   if (lastTemp && Number(lastTemp.temp) < FEVER_AT) {
-    raise('info', `마지막 체온이 ${Number(lastTemp.temp).toFixed(1)}℃예요. 열 때문이라면 아이가 힘들어할 때만 먹여도 돼요.`);
+    raise('info', t('마지막 체온이 {temp}℃예요. 열 때문이라면 아이가 힘들어할 때만 먹여도 돼요.', { temp: Number(lastTemp.temp).toFixed(1) }));
   }
 
   if (ing.group === 'NSAID') {
     const tagsWithin = (hours) => new Set(history.filter((e) => e.type === 'symptom' && ms(e.at) <= when
       && ms(e.at) > when - hours * HOUR).flatMap((e) => e.tags || []));
     if (tagsWithin(7 * 24).has(CHICKENPOX_TAG)) {
-      raise('warn', '수두일 때는 이부프로펜 계열을 피하도록 권해요. 먹이기 전에 의사 · 약사와 상의하세요.');
+      raise('warn', t('수두일 때는 이부프로펜 계열을 피하도록 권해요. 먹이기 전에 의사 · 약사와 상의하세요.'));
     }
     const dry = DEHYDRATION_TAGS.filter((t) => tagsWithin(24).has(t));
     if (dry.length) {
-      raise('info', `${dry.join(' · ')} 기록이 있어요. 물을 잘 못 먹거나 소변이 줄었다면 이부프로펜 계열은 의사 · 약사와 먼저 상의하세요.`);
+      raise('info', t('{tags} 기록이 있어요. 물을 잘 못 먹거나 소변이 줄었다면 이부프로펜 계열은 의사 · 약사와 먼저 상의하세요.',
+        { tags: dry.map((x) => t(x)).join(' · ') }));
     }
   }
 
@@ -214,20 +222,22 @@ export function checkDose({
   if (prev) {
     const gapH = (when - ms(prev.at)) / HOUR;
     const need = INGREDIENTS[prev.ingredient].minIntervalH;
-    if (gapH < need) raise('warn', `같은 계열 약 기록이 ${fmtGap(gapH)} 전에 있어요. 간격 안내는 ${need}시간 이상이에요.`);
+    if (gapH < need) raise('warn', t('같은 계열 약 기록이 {gap} 전에 있어요. 간격 안내는 {need}시간 이상이에요.', { gap: fmtGap(gapH), need }));
   }
   if (next) {
     const gapH = (ms(next.at) - when) / HOUR;
     if (gapH < ing.minIntervalH) {
-      raise('warn', `이 시각 ${fmtGap(gapH)} 뒤에 같은 계열 약 기록이 있어요. 간격 안내는 ${ing.minIntervalH}시간 이상이에요.`);
+      raise('warn', t('이 시각 {gap} 뒤에 같은 계열 약 기록이 있어요. 간격 안내는 {need}시간 이상이에요.',
+        { gap: fmtGap(gapH), need: ing.minIntervalH }));
     }
   }
   const near = other.map((e) => ({ e, gapH: (when - ms(e.at)) / HOUR }))
     .filter((x) => Math.abs(x.gapH) < CROSS_MIN_HOURS)
     .sort((x, y) => Math.abs(x.gapH) - Math.abs(y.gapH))[0];
   if (near) {
-    const where = near.gapH >= 0 ? `${fmtGap(near.gapH)} 전에` : `${fmtGap(-near.gapH)} 뒤에`;
-    raise('warn', `다른 계열 약 기록이 ${where} 있어요. 번갈아 먹이기는 의사 · 약사와 상의하세요.`);
+    raise('warn', near.gapH >= 0
+      ? t('다른 계열 약 기록이 {gap} 전에 있어요. 번갈아 먹이기는 의사 · 약사와 상의하세요.', { gap: fmtGap(near.gapH) })
+      : t('다른 계열 약 기록이 {gap} 뒤에 있어요. 번갈아 먹이기는 의사 · 약사와 상의하세요.', { gap: fmtGap(-near.gapH) }));
   }
 
   // 24시간 창 — 이 기록이 들어가는 모든 창(끝이 이 시각부터 24시간 뒤까지) 가운데 가장 많은 것
@@ -242,10 +252,10 @@ export function checkDose({
     if (medId) worstMedCount = Math.max(worstMedCount, inWin.filter((e) => e.medId === medId).length);
   }
   if (worstCount > ing.maxPerDay) {
-    raise('warn', `24시간 안 같은 계열 ${worstCount}번째 기록이에요. 설명서는 하루 ${ing.maxPerDay}번까지예요.`);
+    raise('warn', t('24시간 안 같은 계열 {n}번째 기록이에요. 설명서는 하루 {max}번까지예요.', { n: worstCount, max: ing.maxPerDay }));
   } else if (medMaxPerDay > 0 && worstMedCount > medMaxPerDay) {
     // 제품마다 하루 횟수가 더 적을 수 있다(복합써스펜좌약 「1일 2~3회」) — 내 약에 적어 둔 횟수
-    raise('warn', `24시간 안 이 약 ${worstMedCount}번째 기록이에요. 내 약 설정은 하루 ${medMaxPerDay}번까지예요.`);
+    raise('warn', t('24시간 안 이 약 {n}번째 기록이에요. 내 약 설정은 하루 {max}번까지예요.', { n: worstMedCount, max: medMaxPerDay }));
   }
   return out;
 }
@@ -269,8 +279,9 @@ export function groupLog(group, history, now = new Date()) {
 
 function fmtGap(hours) {
   const mins = Math.max(0, Math.round(hours * 60));
-  if (mins < 60) return `${mins}분`;
-  return `${Math.floor(mins / 60)}시간${mins % 60 ? ` ${mins % 60}분` : ''}`;
+  if (mins < 60) return t('{n}분', { n: mins });
+  const h = Math.floor(mins / 60);
+  return mins % 60 ? t('{h}시간 {m}분', { h, m: mins % 60 }) : t('{h}시간', { h });
 }
 
 // 병원에 가야 할 신호로 보는 증상
@@ -346,44 +357,44 @@ export function alertsFor(child, history, now = new Date()) {
   const maxTemp = temps.reduce((m, e) => Math.max(m, Number(e.temp) || 0), 0);
 
   if (months !== null && months < 3 && maxTemp >= FEVER_AT) {
-    out.push({ level: 'urgent', title: '생후 3개월 미만의 열', body: '해열제를 먹이기 전에 바로 병원(응급실)에 가세요.' });
+    out.push({ level: 'urgent', title: t('생후 3개월 미만의 열'), body: t('해열제를 먹이기 전에 바로 병원(응급실)에 가세요.') });
   }
   // 생후 3~6개월 · 39℃ 이상은 진료(NICE NG143 1.2.13 amber)
   if (months !== null && months >= 3 && months < 6 && maxTemp >= 39) {
-    out.push({ level: 'warn', title: '생후 3~6개월 · 39℃ 이상', body: '오늘 안에 진료를 받으세요.' });
+    out.push({ level: 'warn', title: t('생후 3~6개월 · 39℃ 이상'), body: t('오늘 안에 진료를 받으세요.') });
   }
   const tags = new Set(recent.filter((e) => e.type === 'symptom').flatMap((e) => e.tags || []));
   const urgentTags = URGENT_SYMPTOMS.filter((t) => tags.has(t));
   if (urgentTags.length) {
-    out.push({ level: 'urgent', title: `${urgentTags.join(' · ')}`, body: '바로 병원에 가거나 119 에 전화하세요.' });
+    out.push({ level: 'urgent', title: urgentTags.map((x) => t(x)).join(' · '), body: t('바로 병원에 가거나 119 에 전화하세요.') });
   }
   if (temps[0] && Number(temps[0].temp) >= 40) {
-    out.push({ level: 'warn', title: '40℃ 이상', body: '해열제를 먹인 뒤에도 떨어지지 않거나 아이가 처지면 진료를 받으세요.' });
+    out.push({ level: 'warn', title: t('40℃ 이상'), body: t('해열제를 먹인 뒤에도 떨어지지 않거나 아이가 처지면 진료를 받으세요.') });
   }
   const ep = feverEpisode(history, now);
   // 나이를 모르면 72시간(생년월일은 넣지 않아도 된다)
   const callH = months !== null && months < 24 ? FEVER_CALL_H.under2 : FEVER_CALL_H.over2;
   if (ep && ep.hours >= FEVER_LONG_H) {
-    out.push({ level: 'warn', title: '열이 5일 넘게 이어짐', body: '꼭 진료를 받아 원인(가와사키병 등)을 확인하세요.' });
+    out.push({ level: 'warn', title: t('열이 5일 넘게 이어짐'), body: t('꼭 진료를 받아 원인(가와사키병 등)을 확인하세요.') });
   } else if (ep && ep.hours >= callH) {
     out.push(callH === FEVER_CALL_H.under2
-      ? { level: 'warn', title: '열이 하루 넘게 이어짐', body: '두 돌 전 아이는 열이 24시간 넘게 이어지면 진료를 받아 보세요.' }
-      : { level: 'warn', title: '열이 3일 넘게 이어짐', body: '열이 72시간 넘게 이어지면 진료를 받아 원인을 확인하세요.' });
+      ? { level: 'warn', title: t('열이 하루 넘게 이어짐'), body: t('두 돌 전 아이는 열이 24시간 넘게 이어지면 진료를 받아 보세요.') }
+      : { level: 'warn', title: t('열이 3일 넘게 이어짐'), body: t('열이 72시간 넘게 이어지면 진료를 받아 원인을 확인하세요.') });
   }
   // 열성 경련을 한 아이 — 해열제로 미리 막을 수는 없다(NICE 1.6.1 · Cochrane Offringa 2021)
   if (ep && child && child.seizure) {
-    out.push({ level: 'info', call: true, title: '열성 경련을 한 적 있는 아이',
-      body: '해열제로 경련을 미리 막을 수는 없어요. 경련이 5분 넘게 이어지거나, 처음 보는 모습이면 119 에 전화하세요.' });
+    out.push({ level: 'info', call: true, title: t('열성 경련을 한 적 있는 아이'),
+      body: t('해열제로 경련을 미리 막을 수는 없어요. 경련이 5분 넘게 이어지거나, 처음 보는 모습이면 119 에 전화하세요.') });
   }
   const pee = lastUrine(history, now);
   const peeGapH = pee ? (nowMs - ms(pee.at)) / HOUR : 0;
   // 소변을 기록해 온 아이가 열이 나는 동안만 — 기록을 그만둔 지 오래면(24시간) 짚지 않는다
   if (pee && ep && peeGapH >= URINE_GAP_H && peeGapH < 24) {
-    out.push({ level: 'warn', title: `소변 기록이 ${Math.floor(peeGapH)}시간째 없음`,
-      body: '소변을 봤다면 「소변」을 눌러 남겨 주세요. 정말 8시간 넘게 보지 않았거나 입이 마르고 울어도 눈물이 없으면 바로 진료를 받으세요.' });
+    out.push({ level: 'warn', title: t('소변 기록이 {h}시간째 없음', { h: Math.floor(peeGapH) }),
+      body: t('소변을 봤다면 「소변」을 눌러 남겨 주세요. 정말 8시간 넘게 보지 않았거나 입이 마르고 울어도 눈물이 없으면 바로 진료를 받으세요.') });
   }
   if (temps[0] && Number(temps[0].temp) < 35.5) {
-    out.push({ level: 'warn', title: '체온이 낮음', body: '다시 재 보고, 그래도 35.5℃ 아래면 진료를 받으세요.' });
+    out.push({ level: 'warn', title: t('체온이 낮음'), body: t('다시 재 보고, 그래도 35.5℃ 아래면 진료를 받으세요.') });
   }
   return out;
 }

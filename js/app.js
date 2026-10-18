@@ -5,16 +5,19 @@ import {
   feverEpisode, feverLevel, groupLog, lastTagged, tempTrend,
 } from './dose.js';
 import { chartImage, tempChart } from './chart.js';
+import { HELP_EN } from './en.js';
+import * as i18n from './i18n.js';
+import { isEn, name, t } from './i18n.js';
 import * as notify from './notify.js';
 import { summary } from './report.js';
 import {
-  childSheet, editEntry, medPresetSheet, medSheet, symptomSheet, tempSheet,
+  childSheet, concText, editEntry, medPresetSheet, medSheet, symptomSheet, tempSheet,
 } from './sheets.js';
 import * as share from './share.js';
 import * as store from './store.js';
 import {
-  $, $$, ago, choiceSheet, clock, closeSheet, confirmSheet, dayLabel, elapsed, esc, fmt1, fmtAmount, icon, shareFile, shareText, sheet,
-  toast,
+  $, $$, ago, choiceSheet, clock, closeSheet, confirmSheet, dateLabel, dayLabel, elapsed, esc, fmt1, fmtAmount, icon, isToday, shareFile,
+  shareText, sheet, shortStamp, toast,
 } from './ui.js';
 import * as env from './env.js';
 
@@ -23,6 +26,8 @@ const REPO_URL = 'https://github.com/yeoljigi/yeoljigi.github.io';
 const SPONSOR_URL = 'https://github.com/sponsors/larrykim-dev';
 // 식약처 「의료기기와 개인용 건강관리(웰니스)제품 판단기준」 Ⅴ.3 이 권하는 문구 그대로
 const NOT_DEVICE = '본 제품은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.';
+// 영어로 볼 때는 뜻을 먼저, 식약처 권고 원문을 그 아래 그대로
+const notDevice = () => (isEn() ? `${esc(t(NOT_DEVICE))}<br><span lang="ko">${esc(NOT_DEVICE)}</span>` : esc(NOT_DEVICE));
 let view = 'home';
 let range = 24;
 const calcState = { medId: null };
@@ -33,36 +38,36 @@ const root = $('#app');
 function shell(inner, title, actions = '') {
   return `<header class="top"><h1>${esc(title)}</h1><span class="spacer"></span>${actions}</header>
     <main class="main view-enter" id="main" tabindex="-1">${inner}</main>
-    <div class="tabs"><nav aria-label="화면">
+    <div class="tabs"><nav aria-label="${t('화면 고르기')}">
       ${tab('home', 'home')}${tab('log', 'list')}${tab('calc', 'pill')}${tab('settings', 'gear')}
     </nav></div>`;
 }
-const tab = (key, ic) => `<button type="button" data-view="${key}" ${view === key ? 'aria-current="page"' : ''}>${icon(ic)}<span>${VIEWS[key]}</span></button>`;
+const tab = (key, ic) => `<button type="button" data-view="${key}" ${view === key ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(VIEWS[key])}</span></button>`;
 
 function kidsBar(active) {
   const kids = store.get().children;
   if (!kids.length) return '';
-  return `<div class="kids" role="group" aria-label="아이 고르기">
+  return `<div class="kids" role="group" aria-label="${t('아이 고르기')}">
     ${kids.map((c) => `<button type="button" class="kid" data-kid="${esc(c.id)}" aria-pressed="${c.id === active?.id}">
       <span class="dot" style="background:${esc(c.color)}">${esc(c.name.slice(0, 1))}</span>${esc(c.name)}</button>`).join('')}
-    <button type="button" class="kid add" data-add-kid>${icon('plus', 18)} 아이</button></div>`;
+    <button type="button" class="kid add" data-add-kid>${icon('plus', 18)} ${t('아이')}</button></div>`;
 }
 
 function banners() {
   const out = [];
   if (env.inKakao()) {
-    out.push(`<div class="banner warn">${icon('external')}<div style="flex:1"><b>카카오톡 안에서 열었어요</b>
-      기록이 사라지지 않게 기본 브라우저로 열어 홈 화면에 추가하세요.</div>
-      <button class="btn sm primary" data-open-external>열기</button></div>`);
+    out.push(`<div class="banner warn">${icon('external')}<div style="flex:1"><b>${t('카카오톡 안에서 열었어요')}</b>
+      ${t('기록이 사라지지 않게 기본 브라우저로 열어 홈 화면에 추가하세요.')}</div>
+      <button class="btn sm primary" data-open-external>${t('열기')}</button></div>`);
   } else if (!store.isPersistent()) {
-    out.push(`<div class="banner warn">${icon('alert')}<div><b>기록을 저장하지 못하고 있어요</b>
-      사생활 보호(시크릿) 창이거나 저장 공간이 꽉 찼어요. 창을 닫으면 기록이 사라집니다.</div></div>`);
+    out.push(`<div class="banner warn">${icon('alert')}<div><b>${t('기록을 저장하지 못하고 있어요')}</b>
+      ${t('사생활 보호(시크릿) 창이거나 저장 공간이 꽉 찼어요. 창을 닫으면 기록이 사라집니다.')}</div></div>`);
   } else if (env.canInstall()) {
-    out.push(`<div class="banner">${icon('download')}<div style="flex:1"><b>홈 화면에 추가</b>앱처럼 바로 열고, 기록도 오래 남아요.</div>
-      <button class="btn sm primary" data-install>추가</button></div>`);
+    out.push(`<div class="banner">${icon('download')}<div style="flex:1"><b>${t('홈 화면에 추가')}</b>${t('앱처럼 바로 열고, 기록도 오래 남아요.')}</div>
+      <button class="btn sm primary" data-install>${t('추가')}</button></div>`);
   } else if (env.iosNotInstalled()) {
-    out.push(`<div class="banner">${icon('share')}<div><b>홈 화면에 추가하세요</b>
-      Safari 아래 공유 버튼 → 「홈 화면에 추가」. 그래야 기록이 오래 남고 알림도 받을 수 있어요.</div></div>`);
+    out.push(`<div class="banner">${icon('share')}<div><b>${t('홈 화면에 추가하세요')}</b>
+      ${t('Safari 아래 공유 버튼 → 「홈 화면에 추가」. 그래야 기록이 오래 남고 알림도 받을 수 있어요.')}</div></div>`);
   }
   return out.join('');
 }
@@ -80,46 +85,47 @@ function homeView() {
 
   const alertHtml = alerts.map((a) => `<div class="alert ${a.level}" role="alert">${icon('alert')}
       <div><strong>${esc(a.title)}</strong>${esc(a.body)}
-      ${a.level === 'urgent' || a.call ? `<br><a class="call" href="tel:119">${icon('phone', 16)}&nbsp;119 전화</a>` : ''}</div></div>`).join('');
+      ${a.level === 'urgent' || a.call ? `<br><a class="call" href="tel:119">${icon('phone', 16)}&nbsp;${t('119 전화')}</a>` : ''}</div></div>`).join('');
 
   let nowCard;
   if (lastTemp) {
     const lv = feverLevel(lastTemp.temp);
     const trend = tempTrend(history, now);
     // 해열제를 먹인 뒤 떨어지는지 · 오르는지 — 앞 체온과 견준 값, 그리고 24시간 최고(마지막 것과 다를 때)
-    const change = trend && trend.prev ? `${ago(trend.prev.at, now)} ${fmt1(trend.prev.temp)}℃보다 ${
-      Math.abs(trend.diff) < 0.05 ? '그대로' : `${trend.diff > 0 ? '▲' : '▼'} ${fmt1(Math.abs(trend.diff))}℃`}` : '';
-    const peak = trend && trend.max && trend.max !== lastTemp ? `24시간 최고 ${fmt1(trend.max.temp)}℃` : '';
+    const change = trend && trend.prev ? t('{ago} {temp}℃보다 {diff}', { ago: ago(trend.prev.at, now), temp: fmt1(trend.prev.temp),
+      diff: Math.abs(trend.diff) < 0.05 ? t('그대로') : `${trend.diff > 0 ? '▲' : '▼'} ${fmt1(Math.abs(trend.diff))}℃` }) : '';
+    const peak = trend && trend.max && trend.max !== lastTemp ? t('24시간 최고 {temp}℃', { temp: fmt1(trend.max.temp) }) : '';
     nowCard = `<div class="now">
         <div class="temp num tone-${lv.tone}">${fmt1(lastTemp.temp)}<small>℃</small></div>
-        <div class="meta"><span class="badge bg-${lv.tone}">${esc(lv.label)}</span>
-          <div class="muted small" style="margin-top:6px">${esc(ago(lastTemp.at, now))} · ${esc(clock(lastTemp.at))}${lastTemp.site ? ` · ${esc(lastTemp.site)}` : ''}</div>
-          ${lastTemp.wellbeing ? `<div class="small" style="margin-top:2px">${esc(store.wellbeingLabel(lastTemp.wellbeing))}</div>` : ''}
+        <div class="meta"><span class="badge bg-${lv.tone}">${esc(t(lv.label))}</span>
+          <div class="muted small" style="margin-top:6px">${esc(ago(lastTemp.at, now))} · ${esc(clock(lastTemp.at))}${lastTemp.site ? ` · ${esc(t(lastTemp.site))}` : ''}</div>
+          ${lastTemp.wellbeing ? `<div class="small" style="margin-top:2px">${esc(t(store.wellbeingLabel(lastTemp.wellbeing)))}</div>` : ''}
         </div></div>
       ${change || peak ? `<p class="small" style="margin:10px 0 0;color:var(--text-2)">${esc(change)}${change && peak
         ? '<span class="faint"> · </span>' : ''}${peak ? `<span class="faint">${esc(peak)}</span>` : ''}</p>` : ''}
-      ${ep ? `<p class="small muted" style="margin:12px 0 0">이번 열은 ${esc(dayLabel(ep.start, now).replace(/^.* · /, ''))} ${esc(clock(ep.start))}부터 —
-        <b>${Math.max(1, Math.round(ep.hours))}시간째</b></p>` : ''}
+      ${ep ? `<p class="small muted" style="margin:12px 0 0">${t('이번 열은 {date} {time}부터 — <b>{h}시간째</b>', {
+        date: esc(dateLabel(ep.start)), time: esc(clock(ep.start)), h: Math.max(1, Math.round(ep.hours)) })}</p>` : ''}
       <p class="tip">${esc(careTip(lastTemp.temp))}</p>
-      <div class="helplinks"><button class="link" data-help-er>병원에 가야 할 때 ${icon('chev', 14)}</button>
-        <button class="link" data-help-fever>열, 겁내지 않아도 돼요 ${icon('chev', 14)}</button></div>`;
+      <div class="helplinks"><button class="link" data-help-er>${t('병원에 가야 할 때')} ${icon('chev', 14)}</button>
+        <button class="link" data-help-fever>${t('열, 겁내지 않아도 돼요')} ${icon('chev', 14)}</button></div>`;
   } else {
-    nowCard = `<div class="empty-now">${thermArt()}<div><b>아직 체온 기록이 없어요</b>
-      <div class="muted small">아래 「체온」을 눌러 처음 잰 체온을 남겨 주세요.</div></div></div>`;
+    nowCard = `<div class="empty-now">${thermArt()}<div><b>${t('아직 체온 기록이 없어요')}</b>
+      <div class="muted small">${t('아래 「체온」을 눌러 처음 잰 체온을 남겨 주세요.')}</div></div></div>`;
   }
 
   // 계열마다 마지막 기록과 지난 시간 — 설명서 간격 · 하루 횟수를 옆에 적고, 먹여도 되는지는 판정하지 않는다
   const doseCards = Object.values(GROUPS).map((g) => {
     const l = groupLog(g.key, history, now);
     const color = g.key === 'NSAID' ? 'var(--nsaid)' : 'var(--apap)';
-    const state = l.last ? `${elapsed(l.last.at, now)} 전` : '기록 없음';
-    const what = l.last ? `마지막 ${clock(l.last.at)} · ${l.last.name || INGREDIENTS[l.last.ingredient].name} ${fmtAmount(l.last.amount)}${
-      l.last.unit || 'mL'}` : '먹인 약을 기록하면 여기 보여요';
-    return `<div class="dose" style="--c:${color}"><div class="name">${esc(g.name)}</div>
+    const state = l.last ? t('{t} 전', { t: elapsed(l.last.at, now) }) : t('기록 없음');
+    const what = l.last ? t('마지막 {at} · {med} {amount}', { at: clock(l.last.at),
+      med: name(l.last.name) || t(INGREDIENTS[l.last.ingredient].name), amount: `${fmtAmount(l.last.amount)}${t(l.last.unit || 'mL')}` })
+      : t('먹인 약을 기록하면 여기 보여요');
+    return `<div class="dose" style="--c:${color}"><div class="name">${esc(t(g.name))}</div>
       <div class="state num">${esc(state)}</div>
       <div class="sub">${esc(what)}</div>
-      ${l.last ? `<div class="sub">24시간 ${l.countInDay}번 기록</div>` : ''}
-      <div class="sub label">간격 안내 ${l.intervalH}시간 이상 · 하루 ${l.maxPerDay}번까지</div></div>`;
+      ${l.last ? `<div class="sub">${t('24시간 {n}번 기록', { n: l.countInDay })}</div>` : ''}
+      <div class="sub label">${t('간격 안내 {h}시간 이상 · 하루 {n}번까지', { h: l.intervalH, n: l.maxPerDay })}</div></div>`;
   }).join('');
 
   const notice = months !== null && months < 3
@@ -129,37 +135,36 @@ function homeView() {
   const drink = lastTagged(history, WATER_TAG, now);
   const recent = history.slice(0, 5);
   const inner = `${banners()}${kidsBar(child)}${alertHtml}
-    <section class="card" aria-label="지금 체온"><h2>${esc(child.name)} 지금<span class="spacer"></span>
+    <section class="card" aria-label="${t('지금 체온')}"><h2>${esc(t('{name} 지금', { name: child.name }))}<span class="spacer"></span>
       <span class="faint small">${esc(ageLabel(months))}${child.weight ? ` · ${esc(child.weight)}kg` : ''}</span></h2>${nowCard}</section>
     <div class="quick">
-      <button type="button" data-new="temp"><span class="ico bg-fever">${icon('therm')}</span>체온</button>
-      <button type="button" data-new="med"><span class="ico" style="background:var(--brand-soft);color:var(--brand)">${icon('syrup')}</span>해열제</button>
-      <button type="button" data-new="symptom"><span class="ico bg-info">${icon('note')}</span>증상</button>
-      <button type="button" data-pee><span class="ico bg-mild">${icon('drop')}</span>소변${pee
+      <button type="button" data-new="temp"><span class="ico bg-fever">${icon('therm')}</span>${t('체온')}</button>
+      <button type="button" data-new="med"><span class="ico" style="background:var(--brand-soft);color:var(--brand)">${icon('syrup')}</span>${t('해열제')}</button>
+      <button type="button" data-new="symptom"><span class="ico bg-info">${icon('note')}</span>${t('증상')}</button>
+      <button type="button" data-pee><span class="ico bg-mild">${icon('drop')}</span>${t('소변')}${pee
         ? `<small class="faint">${esc(ago(pee.at, now))}</small>` : ''}</button>
-      <button type="button" data-water><span class="ico bg-ok">${icon('cup')}</span>물${drink
+      <button type="button" data-water><span class="ico bg-ok">${icon('cup')}</span>${t('물')}${drink
         ? `<small class="faint">${esc(ago(drink.at, now))}</small>` : ''}</button>
     </div>
-    <section class="card" aria-label="해열제 기록"><h2>해열제 기록<span class="spacer"></span>
-      <button class="link" data-help-dose>간격 안내</button></h2>
+    <section class="card" aria-label="${t('해열제 기록')}"><h2>${t('해열제 기록')}<span class="spacer"></span>
+      <button class="link" data-help-dose>${t('간격 안내')}</button></h2>
       <div class="doses">${doseCards}</div>${notice}
-      <p class="small muted" style="margin:10px 0 0">다음 약은 포장 설명서의 간격 · 양을 확인하고 먹여 주세요.</p></section>
-    <section class="card" aria-label="최근 24시간 그래프"><h2>최근 24시간<span class="spacer"></span>
-      <button class="link" data-go="log">전체 기록 ${icon('chev', 14)}</button></h2>${tempChart(history, { hours: 24, now })}</section>
-    ${recent.length ? `<div class="section-title">최근 기록</div><div class="rows">${recent.map((e) => rowHtml(e, true)).join('')}</div>` : ''}
-    <p class="small faint" style="text-align:center;margin:18px 8px 0">이 앱은 기록을 돕는 도구예요. 약은 포장 설명서와
-      의사 · 약사의 지시를 먼저 따르세요.</p>`;
-  return shell(inner, '열지기', `<button class="icon-btn" data-share aria-label="진료용 요약 보내기">${icon('share')}</button>`);
+      <p class="small muted" style="margin:10px 0 0">${t('다음 약은 포장 설명서의 간격 · 양을 확인하고 먹여 주세요.')}</p></section>
+    <section class="card" aria-label="${t('최근 24시간 그래프')}"><h2>${t('최근 24시간')}<span class="spacer"></span>
+      <button class="link" data-go="log">${t('전체 기록')} ${icon('chev', 14)}</button></h2>${tempChart(history, { hours: 24, now })}</section>
+    ${recent.length ? `<div class="section-title">${t('최근 기록')}</div><div class="rows">${recent.map((e) => rowHtml(e, true)).join('')}</div>` : ''}
+    <p class="small faint" style="text-align:center;margin:18px 8px 0">${t('이 앱은 기록을 돕는 도구예요. 약은 포장 설명서와 의사 · 약사의 지시를 먼저 따르세요.')}</p>`;
+  return shell(inner, t('열지기'), `<button class="icon-btn" data-share aria-label="${t('진료용 요약 보내기')}">${icon('share')}</button>`);
 }
 
 function welcome() {
   const inner = `${banners()}<div class="hello">${heroArt()}
-      <h2>아이 열, 같이 지켜요</h2>
-      <p>체온 · 해열제 · 증상을 한 번에 남기고<br>언제 무엇을 먹였는지 가족과 함께 봐요.</p>
-      <button class="btn primary block" data-add-kid>아이 더하기</button>
-      <p class="small faint" style="margin-top:14px">기록은 이 휴대폰에만 저장돼요. 가입하지 않아도 됩니다.</p>
+      <h2>${t('아이 열, 같이 지켜요')}</h2>
+      <p>${t('체온 · 해열제 · 증상을 한 번에 남기고<br>언제 무엇을 먹였는지 가족과 함께 봐요.')}</p>
+      <button class="btn primary block" data-add-kid>${t('아이 더하기')}</button>
+      <p class="small faint" style="margin-top:14px">${t('기록은 이 휴대폰에만 저장돼요. 가입하지 않아도 됩니다.')}</p>
     </div>`;
-  return shell(inner, '열지기');
+  return shell(inner, t('열지기'));
 }
 
 function rowHtml(e, withDay = false) {
@@ -169,24 +174,23 @@ function rowHtml(e, withDay = false) {
   if (e.type === 'temp') {
     const lv = feverLevel(e.temp);
     ico = `<span class="ico bg-${lv.tone}">${icon('therm')}</span>`;
-    what = `<b class="num tone-${lv.tone}">${fmt1(e.temp)}℃</b> <span class="muted small">${esc(lv.label)}</span>`;
-    sub = [e.site, store.wellbeingLabel(e.wellbeing), e.memo].filter(Boolean).join(' · ');
+    what = `<b class="num tone-${lv.tone}">${fmt1(e.temp)}℃</b> <span class="muted small">${esc(t(lv.label))}</span>`;
+    sub = [t(e.site || ''), t(store.wellbeingLabel(e.wellbeing)), e.memo].filter(Boolean).join(' · ');
   } else if (e.type === 'med') {
     const ing = INGREDIENTS[e.ingredient];
     const nsaid = ing?.group === 'NSAID';
     ico = `<span class="ico" style="background:${nsaid ? 'var(--info-soft)' : 'var(--brand-soft)'};color:${nsaid ? 'var(--nsaid)' : 'var(--apap)'}">${icon('syrup')}</span>`;
-    what = `<b>${esc(e.name || ing?.name || '해열제')}</b> <span class="num">${esc(fmtAmount(e.amount))}${esc(e.unit || 'mL')}</span>`;
-    sub = [`${ing?.name || ''} ${e.mg}mg`, e.memo].filter(Boolean).join(' · ');
+    what = `<b>${esc(name(e.name) || t(ing?.name || '해열제'))}</b> <span class="num">${esc(fmtAmount(e.amount))}${esc(t(e.unit || 'mL'))}</span>`;
+    sub = [`${t(ing?.name || '')} ${e.mg}mg`, e.memo].filter(Boolean).join(' · ');
   } else {
     // 홈에서 한 번 눌러 남긴 소변 · 물은 그 단추의 그림으로
     const tags = e.tags || [];
     const one = tags.length === 1 && tags[0] === URINE_TAG ? ['mild', 'drop'] : tags.length === 1 && tags[0] === WATER_TAG ? ['ok', 'cup'] : null;
     ico = one ? `<span class="ico bg-${one[0]}">${icon(one[1])}</span>` : `<span class="ico bg-info">${icon('note')}</span>`;
-    what = `<b>${esc((e.tags || []).join(', ') || '메모')}</b>`;
+    what = `<b>${esc((e.tags || []).map((x) => t(x)).join(', ') || t('메모'))}</b>`;
     sub = e.memo || '';
   }
-  const when = withDay && dayLabel(e.at).startsWith('오늘') ? clock(e.at)
-    : withDay ? `${new Date(e.at).getMonth() + 1}/${new Date(e.at).getDate()} ${clock(e.at).replace(/^(오전|오후) /, '')}` : clock(e.at);
+  const when = withDay && !isToday(e.at) ? shortStamp(e.at) : clock(e.at);
   return `<button type="button" class="row" data-entry="${esc(e.id)}"><span class="when num">${esc(when)}</span>${ico}
     <span class="what">${what}${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</span><span class="chev">${icon('chev', 18)}</span></button>`;
 }
@@ -203,46 +207,46 @@ function logView() {
     groups[groups.length - 1].items.push(e);
   }
   const inner = `${kidsBar(child)}
-    <section class="card"><h2>체온 그래프<span class="spacer"></span>
-      <span class="seg" role="group" aria-label="기간">${[24, 72, 168].map((h) => `<button type="button" data-range="${h}"
-        aria-pressed="${range === h}">${h === 24 ? '24시간' : h === 72 ? '3일' : '7일'}</button>`).join('')}</span></h2>
+    <section class="card"><h2>${t('체온 그래프')}<span class="spacer"></span>
+      <span class="seg" role="group" aria-label="${t('기간')}">${[24, 72, 168].map((h) => `<button type="button" data-range="${h}"
+        aria-pressed="${range === h}">${h === 24 ? t('{h}시간', { h: 24 }) : t('{n}일', { n: h / 24 })}</button>`).join('')}</span></h2>
       ${tempChart(history, { hours: range, now: new Date() })}</section>
     ${groups.length ? groups.map((g) => `<div class="day">${esc(g.label)}</div>
       <div class="rows">${g.items.map((e) => rowHtml(e)).join('')}</div>`).join('')
-    : `<div class="card" style="text-align:center"><p class="muted" style="margin:6px 0 14px">아직 기록이 없어요.</p>
-        <button class="btn primary" data-new="temp">체온 기록하기</button></div>`}`;
-  return shell(inner, `${child.name} 기록`, `<button class="icon-btn" data-share aria-label="진료용 요약 보내기">${icon('share')}</button>`);
+    : `<div class="card" style="text-align:center"><p class="muted" style="margin:6px 0 14px">${t('아직 기록이 없어요.')}</p>
+        <button class="btn primary" data-new="temp">${t('체온 기록하기')}</button></div>`}`;
+  return shell(inner, t('{name} 기록', { name: child.name }), `<button class="icon-btn" data-share aria-label="${t('진료용 요약 보내기')}">${icon('share')}</button>`);
 }
 
 // ── 약 안내(포장 설명서 내용) ─────────────────
 // 설명서의 용법을 옮겨 보여 줄 뿐, 아이 체중 · 나이로 양을 셈하지 않는다(dose.js 머리말).
-const yearsLabel = (r) => `${r.fromM / 12}~${r.toM / 12 - 1}세`;
+const yearsLabel = (r) => t('{a}~{b}세', { a: r.fromM / 12, b: r.toM / 12 - 1 });
 
 function labelOutput(med, months) {
-  if (!med) return '<p class="muted" style="text-align:center;margin:8px 0">설정 → 내 약에서 약을 더해 주세요.</p>';
+  if (!med) return `<p class="muted" style="text-align:center;margin:8px 0">${t('설정 → 내 약에서 약을 더해 주세요.')}</p>`;
   const ing = INGREDIENTS[med.ingredient];
-  const unitText = med.unit === 'mL' ? `1mL에 ${med.conc}mg${med.conc * 5 === Math.round(med.conc * 5) ? ` (5mL에 ${med.conc * 5}mg)` : ''}`
-    : `1개에 ${med.conc}mg`;
+  const unitText = med.unit === 'mL' ? `${t('1mL에 {mg}mg', { mg: med.conc })}${med.conc * 5 === Math.round(med.conc * 5)
+    ? ` ${t('(5mL에 {mg}mg)', { mg: med.conc * 5 })}` : ''}` : t('1개에 {mg}mg', { mg: med.conc });
   if (med.combo) {
-    return `<div class="check info">${esc(med.name)}은(는) 종합감기약이에요. 양은 <b>포장의 나이별 표</b>대로 먹이세요.
-      해열제로 기록해 두면 든 ${esc(ing.name)}을 홈의 해열제 기록에 함께 보여요.</div>
-      <dl class="kv"><dt>함량</dt><dd>${esc(ing.name)} ${esc(unitText)}</dd></dl>`;
+    return `<div class="check info">${t('{med}은(는) 종합감기약이에요. 양은 <b>포장의 나이별 표</b>대로 먹이세요. 해열제로 기록해 두면 든 {ing}을 홈의 해열제 기록에 함께 보여요.',
+      { med: esc(name(med.name)), ing: esc(t(ing.name)) })}</div>
+      <dl class="kv"><dt>${t('함량')}</dt><dd>${esc(t(ing.name))} ${esc(unitText)}</dd></dl>`;
   }
   const notice = ageNotice(med.ingredient, months);
   // 나이별 표는 mg 그대로, 이 약의 함량으로 바꾼 mL 을 곁에(제품 함량만 쓰는 단위 바꿈)
   const mL = (mg) => fmtAmount(Math.round((mg / med.conc) * 10) / 10);
-  const inUnit = (r) => (med.unit === 'mL' ? `<br><span class="faint">이 약 ${mL(r.singleMin)}~${mL(r.single)}mL</span>` : '');
-  const table = ing.ageTable ? `<table class="label-table"><thead><tr><th>나이</th><th>1회</th><th>하루 최대</th></tr></thead><tbody>
+  const inUnit = (r) => (med.unit === 'mL' ? `<br><span class="faint">${t('이 약 {a}~{b}mL', { a: mL(r.singleMin), b: mL(r.single) })}</span>` : '');
+  const table = ing.ageTable ? `<table class="label-table"><thead><tr><th>${t('나이')}</th><th>${t('1회')}</th><th>${t('하루 최대')}</th></tr></thead><tbody>
       ${ing.ageTable.map((r) => `<tr><td>${yearsLabel(r)}</td><td class="num">${r.singleMin}~${r.single}mg${inUnit(r)}</td>
         <td class="num">${r.day}mg</td></tr>`).join('')}</tbody></table>
-      <p class="small muted" style="margin:6px 0 0">표에 없는 나이(돌 전 등)는 의사 · 약사와 상의하세요.</p>` : '';
+      <p class="small muted" style="margin:6px 0 0">${t('표에 없는 나이(돌 전 등)는 의사 · 약사와 상의하세요.')}</p>` : '';
   return `${notice ? `<div class="check warn">${esc(notice)}</div>` : ''}
-    <dl class="kv"><dt>함량</dt><dd>${esc(ing.name)} ${esc(unitText)}</dd>
-      <dt>1회</dt><dd>${esc(ing.label.single)}</dd>
-      <dt>간격</dt><dd>${esc(ing.label.interval)}</dd>
-      <dt>하루</dt><dd>${esc(ing.label.day)}${med.maxPerDay && med.maxPerDay < ing.maxPerDay
-        ? ` · 이 약은 하루 ${med.maxPerDay}번까지(내 약 설정)` : ''}</dd>
-      <dt>먹이는 나이</dt><dd>보통 생후 ${ing.minAgeMonths}개월부터</dd></dl>${table}`;
+    <dl class="kv"><dt>${t('함량')}</dt><dd>${esc(t(ing.name))} ${esc(unitText)}</dd>
+      <dt>${t('1회')}</dt><dd>${esc(t(ing.label.single))}</dd>
+      <dt>${t('간격')}</dt><dd>${esc(t(ing.label.interval))}</dd>
+      <dt>${t('하루')}</dt><dd>${esc(t(ing.label.day))}${med.maxPerDay && med.maxPerDay < ing.maxPerDay
+        ? ` · ${t('이 약은 하루 {n}번까지(내 약 설정)', { n: med.maxPerDay })}` : ''}</dd>
+      <dt>${t('먹이는 나이')}</dt><dd>${t('보통 생후 {m}개월부터', { m: ing.minAgeMonths })}</dd></dl>${table}`;
 }
 
 function calcView() {
@@ -250,91 +254,94 @@ function calcView() {
   const meds = store.get().meds;
   const med = meds.find((m) => m.id === calcState.medId) || meds[0];
   const out = labelOutput(med, child ? ageMonths(child.birth) : null);
-  const inner = `<section class="card"><h2>포장 설명서 내용</h2>
-      <div class="field"><span>약</span><div class="medpick" role="group" aria-label="약">
+  const inner = `<section class="card"><h2>${t('포장 설명서 내용')}</h2>
+      <div class="field"><span>${t('약')}</span><div class="medpick" role="group" aria-label="${t('약')}">
         ${meds.map((m) => {
           const ing = INGREDIENTS[m.ingredient];
           return `<button type="button" data-calc-med="${esc(m.id)}" aria-pressed="${m.id === med?.id}">
           <span class="sw" style="background:${ing.group === 'NSAID' ? 'var(--nsaid)' : 'var(--apap)'}"></span>
-          <span><b>${esc(m.name)}</b><small>${esc(ing.name)} · ${m.unit === 'mL' ? `${esc(m.conc)}mg/mL` : `1개 ${esc(m.conc)}mg`}</small></span></button>`;
+          <span><b>${esc(name(m.name))}</b><small>${esc(t(ing.name))} · ${esc(concText(m))}</small></span></button>`;
         }).join('')}</div></div>
       <div aria-live="polite">${out}</div>
-      <p class="small muted" style="margin:12px 0 0">국내 허가 사항의 일반적인 내용이에요. 아이에게 먹일 양은 <b>손에 든 약의 포장 설명서</b>
-        (나이 · 체중별 표)와 의사 · 약사의 지시를 따르세요. 이 앱은 양을 계산하지 않아요.</p></section>
-    <section class="card prose" aria-label="주의"><h2>꼭 확인하세요</h2>
-      <ul><li><b>포장의 함량</b>이 위 약의 함량과 같은지 보세요. 같은 성분도 제품마다 다를 수 있어요(설정 → 내 약에서 고침).</li>
+      <p class="small muted" style="margin:12px 0 0">${t('국내 허가 사항의 일반적인 내용이에요. 아이에게 먹일 양은 <b>손에 든 약의 포장 설명서</b>(나이 · 체중별 표)와 의사 · 약사의 지시를 따르세요. 이 앱은 양을 계산하지 않아요.')}</p></section>
+    <section class="card prose" aria-label="${t('주의')}"><h2>${t('꼭 확인하세요')}</h2>
+      ${isEn() ? HELP_EN.check() : `<ul><li><b>포장의 함량</b>이 위 약의 함량과 같은지 보세요. 같은 성분도 제품마다 다를 수 있어요(설정 → 내 약에서 고침).</li>
         <li><b>이름이 같아도 성분이 다른 약</b>이 있어요(예: 챔프시럽은 아세트아미노펜, 챔프이부펜시럽은 이부프로펜). 포장의 <b>성분명</b>을 보세요.</li>
         <li><b>종합감기약</b>(챔프콜드펜 · 콜대원키즈콜드에스 등)에도 아세트아미노펜이 들어 있어요. 같이 먹였다면 설정 → 내 약에서
           그 약을 골라 더하고 해열제로 기록하세요 — 홈의 해열제 기록에 함께 보여요.</li>
         <li>현탁액(시럽)은 먹이기 전에 잘 흔드세요.</li>
         <li>시럽은 계량컵보다 <b>눈금 있는 먹이는 주사기</b>로 재세요 — 잘못 재는 일이 훨씬 적어요.</li>
         <li>두 계열을 한꺼번에 먹이지 마세요. 번갈아 먹이기는 아이가 계속 힘들어할 때만, 의사 · 약사와 상의해서.</li>
-        <li>먹인 약은 꼭 「해열제」로 기록해 두세요 — 다른 보호자도 언제 무엇을 먹였는지 알 수 있어요.</li></ul>
-      <p class="faint small">${esc(NOT_DEVICE)}</p></section>`;
-  return shell(inner, '약 안내');
+        <li>먹인 약은 꼭 「해열제」로 기록해 두세요 — 다른 보호자도 언제 무엇을 먹였는지 알 수 있어요.</li></ul>`}
+      <p class="faint small">${notDevice()}</p></section>`;
+  return shell(inner, t('약 안내'));
 }
 
 // ── 설정 ───────────────────────────────────
 function settingsView() {
   const s = store.get();
   const perm = notify.permission();
-  const inner = `<div class="section-title">아이</div><div class="list">
+  const inner = `<div class="section-title">${t('아이')}</div><div class="list">
       ${s.children.map((c) => `<button type="button" class="item" data-edit-kid="${esc(c.id)}">
         <span class="kid" style="border:0;padding:0;height:auto;background:none"><span class="dot" style="background:${esc(c.color)}">${esc(c.name.slice(0, 1))}</span></span>
-        <span class="grow"><b>${esc(c.name)}</b><small>${esc([ageLabel(ageMonths(c.birth)), c.weight ? `${c.weight}kg` : '몸무게 없음'].filter(Boolean).join(' · '))}</small></span>
+        <span class="grow"><b>${esc(c.name)}</b><small>${esc([ageLabel(ageMonths(c.birth)), c.weight ? `${c.weight}kg` : t('몸무게 없음')].filter(Boolean).join(' · '))}</small></span>
         ${icon('chev', 18)}</button>`).join('')}
-      <button type="button" class="item" data-add-kid>${icon('plus', 20)}<span class="grow">아이 더하기</span></button></div>
+      <button type="button" class="item" data-add-kid>${icon('plus', 20)}<span class="grow">${t('아이 더하기')}</span></button></div>
 
-    <div class="section-title">내 약</div><div class="list">
+    <div class="section-title">${t('내 약')}</div><div class="list">
       ${s.meds.map((m) => `<button type="button" class="item" data-edit-med="${esc(m.id)}">
-        <span class="grow"><b>${esc(m.name)}</b><small>${esc(INGREDIENTS[m.ingredient].name)} · ${m.unit === 'mL' ? `${esc(m.conc)}mg/mL` : `1개 ${esc(m.conc)}mg`}</small></span>
+        <span class="grow"><b>${esc(name(m.name))}</b><small>${esc(t(INGREDIENTS[m.ingredient].name))} · ${esc(concText(m))}</small></span>
         ${icon('chev', 18)}</button>`).join('')}
-      <button type="button" class="item" data-add-med>${icon('plus', 20)}<span class="grow">약 더하기</span></button></div>
+      <button type="button" class="item" data-add-med>${icon('plus', 20)}<span class="grow">${t('약 더하기')}</span></button></div>
 
-    <div class="section-title">알림</div><div class="list">
-      <label class="item"><span class="grow"><b>해열제 1시간 뒤 체온 다시 재기</b>
-        <small>${perm === 'unsupported' ? '이 브라우저는 알림을 지원하지 않아요. 홈 화면에 추가하면 될 수 있어요.'
-          : perm === 'denied' ? '알림이 막혀 있어요. 브라우저 · 휴대폰 설정에서 허용해 주세요.'
-          : '앱이 열려 있거나 뒤에 남아 있을 때 울려요. 완전히 닫으면 울리지 않아요.'}</small></span>
+    <div class="section-title">${t('알림')}</div><div class="list">
+      <label class="item"><span class="grow"><b>${t('해열제 1시간 뒤 체온 다시 재기')}</b>
+        <small>${perm === 'unsupported' ? t('이 브라우저는 알림을 지원하지 않아요. 홈 화면에 추가하면 될 수 있어요.')
+          : perm === 'denied' ? t('알림이 막혀 있어요. 브라우저 · 휴대폰 설정에서 허용해 주세요.')
+          : t('앱이 열려 있거나 뒤에 남아 있을 때 울려요. 완전히 닫으면 울리지 않아요.')}</small></span>
         <input type="checkbox" class="switch" data-notify ${s.settings.notify && perm === 'granted' ? 'checked' : ''}
-          ${perm === 'unsupported' || perm === 'denied' ? 'disabled' : ''} aria-label="알림 켜기"></label></div>
+          ${perm === 'unsupported' || perm === 'denied' ? 'disabled' : ''} aria-label="${t('알림 켜기')}"></label></div>
 
-    <div class="section-title">화면</div><div class="list">
-      <div class="item"><span class="grow"><b>테마</b></span><span class="seg" role="group" aria-label="테마">
+    <div class="section-title">${t('화면')}</div><div class="list">
+      <div class="item"><span class="grow"><b>${t('언어')}</b>${isEn() ? '' : '<small lang="en">Language</small>'}</span>
+        <span class="seg" role="group" aria-label="${t('언어')}">
+        ${Object.entries(i18n.LANGS).map(([k, l]) => `<button type="button" data-lang-set="${k}" ${k === 'auto' ? '' : `lang="${k}"`}
+          aria-pressed="${s.settings.lang === k}">${k === 'auto' ? t(l) : l}</button>`).join('')}</span></div>
+      <div class="item"><span class="grow"><b>${t('테마')}</b></span><span class="seg" role="group" aria-label="${t('테마')}">
         ${[['system', '자동'], ['light', '밝게'], ['dark', '어둡게']].map(([k, l]) => `<button type="button" data-theme-set="${k}"
-          aria-pressed="${s.settings.theme === k}">${l}</button>`).join('')}</span></div>
-      <div class="item"><span class="grow"><b>글자 크기</b></span><span class="seg" role="group" aria-label="글자 크기">
+          aria-pressed="${s.settings.theme === k}">${t(l)}</button>`).join('')}</span></div>
+      <div class="item"><span class="grow"><b>${t('글자 크기')}</b></span><span class="seg" role="group" aria-label="${t('글자 크기')}">
         ${Object.entries(store.TEXT_SIZES).map(([k, l]) => `<button type="button" data-text-set="${k}"
-          aria-pressed="${s.settings.text === k}">${l}</button>`).join('')}</span></div></div>
+          aria-pressed="${s.settings.text === k}">${t(l)}</button>`).join('')}</span></div></div>
 
-    <div class="section-title">가족과 나누기</div><div class="list">
-      <button type="button" class="item" data-send-link>${icon('share', 20)}<span class="grow"><b>기록 링크 보내기</b>
-        <small>가족 휴대폰의 열지기에 최근 기록을 합쳐요</small></span>${icon('chev', 18)}</button>
-      <button type="button" class="item" data-paste-link>${icon('copy', 20)}<span class="grow"><b>받은 기록 링크 붙여 넣기</b>
-        <small>홈 화면 앱(아이폰)에서 링크가 브라우저로 열릴 때</small></span>${icon('chev', 18)}</button></div>
+    <div class="section-title">${t('가족과 나누기')}</div><div class="list">
+      <button type="button" class="item" data-send-link>${icon('share', 20)}<span class="grow"><b>${t('기록 링크 보내기')}</b>
+        <small>${t('가족 휴대폰의 열지기에 최근 기록을 합쳐요')}</small></span>${icon('chev', 18)}</button>
+      <button type="button" class="item" data-paste-link>${icon('copy', 20)}<span class="grow"><b>${t('받은 기록 링크 붙여 넣기')}</b>
+        <small>${t('홈 화면 앱(아이폰)에서 링크가 브라우저로 열릴 때')}</small></span>${icon('chev', 18)}</button></div>
 
-    <div class="section-title">기록 보관</div><div class="list">
-      <button type="button" class="item" data-export>${icon('download', 20)}<span class="grow"><b>백업 파일 저장</b>
-        <small>휴대폰을 바꾸거나 다른 브라우저로 옮길 때</small></span></button>
-      <label class="item" style="cursor:pointer">${icon('upload', 20)}<span class="grow"><b>백업 파일 불러오기</b>
-        <small>지금 기록에 합치거나, 파일의 것으로 바꿔요</small></span>
+    <div class="section-title">${t('기록 보관')}</div><div class="list">
+      <button type="button" class="item" data-export>${icon('download', 20)}<span class="grow"><b>${t('백업 파일 저장')}</b>
+        <small>${t('휴대폰을 바꾸거나 다른 브라우저로 옮길 때')}</small></span></button>
+      <label class="item" style="cursor:pointer">${icon('upload', 20)}<span class="grow"><b>${t('백업 파일 불러오기')}</b>
+        <small>${t('지금 기록에 합치거나, 파일의 것으로 바꿔요')}</small></span>
         <input type="file" accept="application/json,.json" data-import class="sr"></label>
-      <button type="button" class="item" data-reset style="color:var(--high)">${icon('trash', 20)}<span class="grow"><b>모든 기록 지우기</b></span></button></div>
+      <button type="button" class="item" data-reset style="color:var(--high)">${icon('trash', 20)}<span class="grow"><b>${t('모든 기록 지우기')}</b></span></button></div>
 
-    <div class="section-title">도움말</div><div class="list">
-      <button type="button" class="item" data-help-er>${icon('alert', 20)}<span class="grow"><b>바로 병원에 가야 할 때</b></span>${icon('chev', 18)}</button>
-      <button type="button" class="item" data-help-dose>${icon('info', 20)}<span class="grow"><b>해열제 간격 · 교차 복용</b></span>${icon('chev', 18)}</button>
-      <button type="button" class="item" data-help-fever>${icon('therm', 20)}<span class="grow"><b>열, 겁내지 않아도 돼요</b></span>${icon('chev', 18)}</button>
-      <button type="button" class="item" data-help-about>${icon('info', 20)}<span class="grow"><b>이 앱에 대해</b>
-        <small>판 ${esc(env.VERSION)}</small></span>${icon('chev', 18)}</button>
-      <a class="item" href="${SPONSOR_URL}" target="_blank" rel="noopener">${icon('heart', 20)}<span class="grow"><b>만든 사람 응원하기</b>
-        <small>무료 · 광고 없이 이어 가게 — GitHub Sponsors</small></span>${icon('external', 18)}</a></div>`;
-  return shell(inner, '설정');
+    <div class="section-title">${t('도움말')}</div><div class="list">
+      <button type="button" class="item" data-help-er>${icon('alert', 20)}<span class="grow"><b>${t('바로 병원에 가야 할 때')}</b></span>${icon('chev', 18)}</button>
+      <button type="button" class="item" data-help-dose>${icon('info', 20)}<span class="grow"><b>${t('해열제 간격 · 교차 복용')}</b></span>${icon('chev', 18)}</button>
+      <button type="button" class="item" data-help-fever>${icon('therm', 20)}<span class="grow"><b>${t('열, 겁내지 않아도 돼요')}</b></span>${icon('chev', 18)}</button>
+      <button type="button" class="item" data-help-about>${icon('info', 20)}<span class="grow"><b>${t('이 앱에 대해')}</b>
+        <small>${t('판 {v}', { v: esc(env.VERSION) })}</small></span>${icon('chev', 18)}</button>
+      <a class="item" href="${SPONSOR_URL}" target="_blank" rel="noopener">${icon('heart', 20)}<span class="grow"><b>${t('만든 사람 응원하기')}</b>
+        <small>${t('무료 · 광고 없이 이어 가게 — GitHub Sponsors')}</small></span>${icon('external', 18)}</a></div>`;
+  return shell(inner, t('설정'));
 }
 
 // ── 도움말 창 ───────────────────────────────
 function helpEr() {
-  sheet({ title: '바로 병원에 가야 할 때', body: `<div class="prose">
+  sheet({ title: t('바로 병원에 가야 할 때'), body: isEn() ? HELP_EN.er() : `<div class="prose">
     <h3>바로 응급실 · 119</h3><ul>
       <li>생후 3개월 미만 아기가 38℃ 이상</li><li>경련(열성 경련 포함) · 의식이 흐리거나 깨워도 잘 안 깸</li>
       <li>숨쉬기 힘들어함 · 숨 쉴 때 끙끙거림 · 입술이 파래짐</li>
@@ -359,7 +366,7 @@ function helpEr() {
 }
 
 function helpDose() {
-  sheet({ title: '해열제 간격 · 교차 복용', body: `<div class="prose">
+  sheet({ title: t('해열제 간격 · 교차 복용'), body: isEn() ? HELP_EN.dose() : `<div class="prose">
     <h3>계열이 둘이에요</h3><ul>
       <li><b style="color:var(--apap)">아세트아미노펜 계열</b> — 4~6시간 간격, 24시간에 5번까지</li>
       <li><b style="color:var(--nsaid)">이부프로펜 계열</b>(이부프로펜 · 덱시부프로펜) — 6~8시간 간격, 24시간에 4번까지.
@@ -387,7 +394,7 @@ function helpDose() {
 // 열 공포를 줄이는 짧은 글 — 부모가 가장 많이 찾는 것은 경고 신호와 「열이란」(Gwiasda 2026 Digit Health),
 // 짧은 안내만으로 열에 대한 생각이 바뀐다(Gwiasda 2022 GMS J Med Educ)
 function helpFever() {
-  sheet({ title: '열, 겁내지 않아도 돼요', body: `<div class="prose">
+  sheet({ title: t('열, 겁내지 않아도 돼요'), body: isEn() ? HELP_EN.fever() : `<div class="prose">
     <h3>열은 몸이 싸우는 반응이에요</h3>
     <p>열은 병균과 싸우려고 몸이 스스로 올리는 것이에요. 열 자체로 뇌가 상하지는 않아요(42℃ 아래).</p>
     <h3>목표는 정상 체온이 아니라 편안함</h3>
@@ -405,7 +412,8 @@ function helpFever() {
 }
 
 function helpAbout() {
-  sheet({ title: '열지기', body: `<div class="prose">
+  sheet({ title: t('열지기'), body: isEn()
+    ? HELP_EN.about({ repo: REPO_URL, sponsor: SPONSOR_URL, version: esc(env.VERSION), notDevice: notDevice() }) : `<div class="prose">
     <p>아이가 열이 날 때 체온 · 해열제 · 증상을 남기는 기록장이에요. 먹인 약과 시간을 가족과 나누고, 약의 포장 설명서 내용을
       함께 보여 줘요. 먹일 양이나 시각을 계산하지는 않아요.</p>
     <h3>기록은 어디에?</h3>
@@ -429,30 +437,44 @@ function helpAbout() {
 async function shareSummary() {
   const child = store.activeChild();
   if (!child) return;
-  const text = summary(child, store.entriesOf(child.id));
+  // 영어로 쓰는 부모도 한국 병원에서는 한국어 요약을 보여 줄 수 있게 — 요약 글만 말을 바꾼다
+  let textLang = i18n.lang();
+  const textOf = () => i18n.withLang(textLang, () => summary(child, store.entriesOf(child.id)));
+  let text = textOf();
   const el = sheet({
-    title: '진료용 요약',
-    body: `<p class="muted small" style="margin:0 0 10px">최근 72시간 기록이에요. 병원에서 보여 주거나 가족에게 보내세요.</p>
-      <textarea class="input" readonly style="height:260px;font-size:calc(14px * var(--fs))" aria-label="요약">${esc(text)}</textarea>
-      <button class="link" data-send-link style="margin-top:10px">${icon('share', 16)} 가족 휴대폰과 기록 합치기 — 기록 링크 보내기</button>`,
-    footer: `<button class="btn" data-copy>${icon('copy', 20)} 복사</button>
-      <button class="btn" data-png>${icon('image', 20)} 그래프</button>
-      ${navigator.share ? `<button class="btn primary" data-send>${icon('share', 20)} 보내기</button>` : ''}`,
+    title: t('진료용 요약'),
+    body: `<p class="muted small" style="margin:0 0 10px">${t('최근 72시간 기록이에요. 병원에서 보여 주거나 가족에게 보내세요.')}</p>
+      ${isEn() ? `<div style="display:flex;align-items:center;gap:10px;margin:0 0 10px"><span class="seg" role="group" aria-label="${t('요약 글의 말')}">
+        <button type="button" data-text-lang="en" aria-pressed="true">English</button>
+        <button type="button" data-text-lang="ko" lang="ko" aria-pressed="false">한국어</button></span>
+        <span class="small faint">${t('한국 병원에서는 한국어로 보여 주세요.')}</span></div>` : ''}
+      <textarea class="input" readonly style="height:260px;font-size:calc(14px * var(--fs))" aria-label="${t('요약')}">${esc(text)}</textarea>
+      <button class="link" data-send-link style="margin-top:10px">${icon('share', 16)} ${t('가족 휴대폰과 기록 합치기 — 기록 링크 보내기')}</button>`,
+    footer: `<button class="btn" data-copy>${icon('copy', 20)} ${t('복사')}</button>
+      <button class="btn" data-png>${icon('image', 20)} ${t('그래프')}</button>
+      ${navigator.share ? `<button class="btn primary" data-send>${icon('share', 20)} ${t('보내기')}</button>` : ''}`,
   });
+  $$('[data-text-lang]', el).forEach((b) => b.addEventListener('click', () => {
+    textLang = b.dataset.textLang;
+    text = textOf();
+    $('textarea', el).value = text;
+    $$('[data-text-lang]', el).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
   // 그래프 그림 — 의사에게 휴대폰 화면 대신 보여 주거나 가족에게 보낼 때
   $('[data-png]', el).addEventListener('click', async () => {
     try {
-      const blob = await chartImage(store.entriesOf(child.id), { hours: 72, title: `${child.name} 체온 · 해열제` });
+      const blob = await chartImage(store.entriesOf(child.id), { hours: 72, title: t('{name} 체온 · 해열제', { name: child.name }) });
       const d = new Date();
-      await shareFile(new File([blob], `열지기-${child.name}-${d.getMonth() + 1}월${d.getDate()}일.png`, { type: 'image/png' }));
+      await shareFile(new File([blob], t('열지기-{name}-{m}월{d}일.png', { name: child.name, m: d.getMonth() + 1, d: d.getDate() }),
+        { type: 'image/png' }));
     } catch (err) {
       console.error(err);
-      toast('그림을 만들지 못했어요.');
+      toast(t('그림을 만들지 못했어요.'));
     }
   });
   $('[data-copy]', el).addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(text); toast('복사했어요.'); } catch {
-      $('textarea', el).select(); toast('글을 길게 눌러 복사하세요.');
+    try { await navigator.clipboard.writeText(text); toast(t('복사했어요.')); } catch {
+      $('textarea', el).select(); toast(t('글을 길게 눌러 복사하세요.'));
     }
   });
   const send = $('[data-send]', el);
@@ -485,16 +507,15 @@ function render() {
   } catch (err) {
     // 기록 하나가 깨져도 앱이 빈 화면으로 멈추지 않게 — 백업을 받고 다시 시작할 길을 둔다
     console.error(err);
-    html = shell(`<div class="card"><h2>${icon('alert', 18)} 화면을 그리지 못했어요</h2>
-      <p class="muted small" style="margin:0 0 14px">저장된 기록 가운데 읽을 수 없는 것이 있어요. 먼저 백업 파일을 저장해 두고,
-        다른 화면으로 가 보거나 모든 기록을 지우고 다시 시작하세요.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-export>${icon('download', 18)} 백업 파일 저장</button>
-        <button class="btn sm danger" data-reset>모든 기록 지우기</button></div></div>`, '열지기');
+    html = shell(`<div class="card"><h2>${icon('alert', 18)} ${t('화면을 그리지 못했어요')}</h2>
+      <p class="muted small" style="margin:0 0 14px">${t('저장된 기록 가운데 읽을 수 없는 것이 있어요. 먼저 백업 파일을 저장해 두고, 다른 화면으로 가 보거나 모든 기록을 지우고 다시 시작하세요.')}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-export>${icon('download', 18)} ${t('백업 파일 저장')}</button>
+        <button class="btn sm danger" data-reset>${t('모든 기록 지우기')}</button></div></div>`, t('열지기'));
   }
   const y = window.scrollY;
   root.innerHTML = html;
   window.scrollTo(0, y);
-  document.title = view === 'home' ? '열지기' : `${VIEWS[view]} · 열지기`;
+  document.title = view === 'home' ? t('열지기') : `${t(VIEWS[view])} · ${t('열지기')}`;
 }
 
 function go(next) {
@@ -505,7 +526,9 @@ function go(next) {
 }
 
 function applyTheme() {
-  const { theme, text } = store.get().settings;
+  const { theme, text, lang } = store.get().settings;
+  i18n.setLang(i18n.resolve(lang));
+  document.documentElement.lang = i18n.lang();
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
   if (text === 'md') document.documentElement.removeAttribute('data-text');
@@ -519,9 +542,9 @@ function withChild(fn) {
 }
 
 root.addEventListener('click', async (ev) => {
-  const t = ev.target.closest('button, [data-entry]');
-  if (!t) return;
-  const d = t.dataset;
+  const btn = ev.target.closest('button, [data-entry]');
+  if (!btn) return;
+  const d = btn.dataset;
   if (d.view) go(d.view);
   else if (d.go) go(d.go);
   else if (d.kid) { store.setActive(d.kid); }
@@ -532,19 +555,19 @@ root.addEventListener('click', async (ev) => {
       // 밤에 한 번 눌러 바로 — 잘못 눌렀으면 되돌리기
       const id = store.uid();
       store.saveEntry({ id, childId: child.id, type: 'symptom', tags: [URINE_TAG], memo: '', at: new Date().toISOString() });
-      toast('소변 기록했어요.', { label: '되돌리기', run: () => store.removeEntry(id) });
+      toast(t('소변 기록했어요.'), { label: t('되돌리기'), run: () => store.removeEntry(id) });
     });
   } else if ('water' in d) {
     withChild((child) => {
       const id = store.uid();
       store.saveEntry({ id, childId: child.id, type: 'symptom', tags: [WATER_TAG], memo: '', at: new Date().toISOString() });
-      toast('물 마신 것을 기록했어요.', { label: '되돌리기', run: () => store.removeEntry(id) });
+      toast(t('물 마신 것을 기록했어요.'), { label: t('되돌리기'), run: () => store.removeEntry(id) });
     });
   } else if (d.new) {
     withChild((child) => {
       if (d.new === 'temp') tempSheet(child);
       else if (d.new === 'med') {
-        if (!store.get().meds.length) { toast('설정 → 내 약에서 약을 먼저 더해 주세요.'); return; }
+        if (!store.get().meds.length) { toast(t('설정 → 내 약에서 약을 먼저 더해 주세요.')); return; }
         medSheet(child);
       } else symptomSheet(child);
     });
@@ -563,34 +586,35 @@ root.addEventListener('click', async (ev) => {
   else if ('addMed' in d) medPresetSheet();
   else if (d.themeSet) { store.setSetting('theme', d.themeSet); applyTheme(); }
   else if (d.textSet) { store.setSetting('text', d.textSet); applyTheme(); }
+  else if (d.langSet) store.setSetting('lang', d.langSet);
   else if ('sendLink' in d) sendLinkSheet();
   else if ('pasteLink' in d) pasteLinkSheet();
   else if ('export' in d) exportBackup();
   else if ('reset' in d) {
-    const ok = await confirmSheet({ title: '모든 기록 지우기', danger: true, ok: '모두 지우기',
-      text: '아이 · 기록 · 내 약이 모두 지워지고 되돌릴 수 없어요. 먼저 백업 파일을 저장해 두세요.' });
-    if (ok) { store.resetAll(); toast('모두 지웠어요.'); go('home'); }
+    const ok = await confirmSheet({ title: t('모든 기록 지우기'), danger: true, ok: t('모두 지우기'),
+      text: t('아이 · 기록 · 내 약이 모두 지워지고 되돌릴 수 없어요. 먼저 백업 파일을 저장해 두세요.') });
+    if (ok) { store.resetAll(); toast(t('모두 지웠어요.')); go('home'); }
   } else if ('openExternal' in d) env.openExternal();
   else if ('install' in d) { await env.install(); render(); }
 });
 
 root.addEventListener('change', async (ev) => {
-  const t = ev.target;
-  if (t.matches('[data-notify]')) {
-    if (t.checked) {
+  const el = ev.target;
+  if (el.matches('[data-notify]')) {
+    if (el.checked) {
       const p = await notify.ask();
-      if (p !== 'granted') { t.checked = false; toast('알림이 허용되지 않았어요.'); store.setSetting('notify', false); return; }
+      if (p !== 'granted') { el.checked = false; toast(t('알림이 허용되지 않았어요.')); store.setSetting('notify', false); return; }
       store.setSetting('notify', true);
-      toast('알림을 켰어요.');
+      toast(t('알림을 켰어요.'));
     } else store.setSetting('notify', false);
-  } else if (t.matches('[data-import]')) {
-    const file = t.files[0];
+  } else if (el.matches('[data-import]')) {
+    const file = el.files[0];
     if (!file) return;
     // 옛 주소에서 받은 백업을 새 주소에서 이미 쓰던 기록에 불러오는 일이 많다 — 합치기가 먼저
-    const how = store.get().children.length ? await choiceSheet({ title: '백업 불러오기',
-      text: `「${file.name}」의 기록을 어떻게 할까요? 합치면 지금 기록은 그대로 두고 없던 기록만 더해요. 바꾸면 지금 기록은 사라져요.`,
-      choices: [{ key: 'replace', label: '바꾸기', kind: 'danger' }, { key: 'merge', label: '합치기', kind: 'primary' }] }) : 'replace';
-    t.value = '';                           // 같은 파일을 다시 골라도 change 가 오게
+    const how = store.get().children.length ? await choiceSheet({ title: t('백업 불러오기'),
+      text: t('「{file}」의 기록을 어떻게 할까요? 합치면 지금 기록은 그대로 두고 없던 기록만 더해요. 바꾸면 지금 기록은 사라져요.', { file: file.name }),
+      choices: [{ key: 'replace', label: t('바꾸기'), kind: 'danger' }, { key: 'merge', label: t('합치기'), kind: 'primary' }] }) : 'replace';
+    el.value = '';                          // 같은 파일을 다시 골라도 change 가 오게
     if (!how) return;
     try {
       const text = await file.text();
@@ -598,20 +622,20 @@ root.addEventListener('change', async (ev) => {
       else {
         const r = store.importJson(text);
         applyTheme();
-        toast(`아이 ${r.children}명 · 기록 ${r.entries}건을 불러왔어요.`);
+        toast(t('아이 {kids}명 · 기록 {n}건을 불러왔어요.', { kids: r.children, n: r.entries }));
       }
     } catch {
-      toast('열지기 백업 파일이 아니거나 깨졌어요.');
+      toast(t('열지기 백업 파일이 아니거나 깨졌어요.'));
     }
   }
 });
 
 function mergedText(r) {
-  const parts = [`기록 ${r.entries}건을 더했어요`];
-  if (r.children) parts.push(`아이 ${r.children}명`);
-  if (r.updated) parts.push(`고친 기록 ${r.updated}건`);
-  if (r.removed) parts.push(`지운 기록 ${r.removed}건 뺌`);
-  return r.entries || r.updated || r.removed || r.children ? `${parts.join(' · ')}.` : '새로 더할 기록이 없어요. 이미 같아요.';
+  const parts = [t('기록 {n}건을 더했어요', { n: r.entries })];
+  if (r.children) parts.push(t('아이 {n}명', { n: r.children }));
+  if (r.updated) parts.push(t('고친 기록 {n}건', { n: r.updated }));
+  if (r.removed) parts.push(t('지운 기록 {n}건 뺌', { n: r.removed }));
+  return r.entries || r.updated || r.removed || r.children ? `${parts.join(' · ')}.` : t('새로 더할 기록이 없어요. 이미 같아요.');
 }
 
 // ── 가족과 나누기(기록 링크, js/share.js) ─────────
@@ -620,13 +644,13 @@ const appUrl = () => `${location.origin}${location.pathname}`;
 function sendLinkSheet() {
   const child = store.activeChild();
   if (!child) { childSheet(null, { first: true }); return; }
-  const el = sheet({ title: '기록 링크 보내기', body: `<div class="prose">
-      <p><b>${esc(child.name)}</b>의 최근 3일 기록(체온 · 해열제 · 증상)을 링크에 담아요. 가족이 링크를 열고 「합치기」를 누르면
-        그 휴대폰의 열지기에 더해져요 — 그쪽 기록은 지우지 않아요.</p>
-      <ul><li>서로 한 번씩 보내면 두 휴대폰의 기록이 같아져요.</li>
-        <li>링크는 서버를 거치지 않지만, 보낸 대화방에는 남아요. <b>가족에게만</b> 보내세요.</li>
-        <li>약을 먹였다면 기록하고 바로 보내 주세요 — 다른 보호자가 또 먹이지 않게.</li></ul></div>`,
-    footer: `<button class="btn primary" data-go-send>${icon('share', 20)} 링크 보내기</button>` });
+  const el = sheet({ title: t('기록 링크 보내기'), body: `<div class="prose">
+      <p>${t('<b>{name}</b>의 최근 3일 기록(체온 · 해열제 · 증상)을 링크에 담아요. 가족이 링크를 열고 「합치기」를 누르면 그 휴대폰의 열지기에 더해져요 — 그쪽 기록은 지우지 않아요.',
+        { name: esc(child.name) })}</p>
+      <ul><li>${t('서로 한 번씩 보내면 두 휴대폰의 기록이 같아져요.')}</li>
+        <li>${t('링크는 서버를 거치지 않지만, 보낸 대화방에는 남아요. <b>가족에게만</b> 보내세요.')}</li>
+        <li>${t('약을 먹였다면 기록하고 바로 보내 주세요 — 다른 보호자가 또 먹이지 않게.')}</li></ul></div>`,
+    footer: `<button class="btn primary" data-go-send>${icon('share', 20)} ${t('링크 보내기')}</button>` });
   $('[data-go-send]', el).addEventListener('click', async () => {
     let link;
     let hours;
@@ -636,18 +660,18 @@ function sendLinkSheet() {
       if (link.length <= share.MAX_LINK) break;
     }
     closeSheet();
-    await shareText(`[${child.name}] 열지기 기록 ${hours === 72 ? '3일' : `${hours}시간`}치예요. 열고 「합치기」를 눌러 주세요.\n${link}`);
+    const span = hours === 72 ? t('{n}일', { n: 3 }) : t('{h}시간', { h: hours });
+    await shareText(`[${child.name}] ${t('열지기 기록 {span}치예요. 열고 「합치기」를 눌러 주세요.', { span })}\n${link}`);
   });
 }
 
 function pasteLinkSheet() {
-  const el = sheet({ title: '받은 기록 링크 붙여 넣기', body: `<p class="muted small" style="margin:0 0 10px">카카오톡 등에서 받은 글을
-      통째로 복사해 붙여 넣으세요. 아이폰의 홈 화면 앱은 브라우저와 기록이 따로라, 링크를 누르면 브라우저 쪽에 합쳐져요.</p>
-      <textarea class="input" name="link" style="height:140px" aria-label="받은 글" placeholder="https://yeoljigi.github.io/#share=…"></textarea>`,
-    footer: `<button class="btn primary" data-go-paste>읽기</button>` });
+  const el = sheet({ title: t('받은 기록 링크 붙여 넣기'), body: `<p class="muted small" style="margin:0 0 10px">${t('카카오톡 등에서 받은 글을 통째로 복사해 붙여 넣으세요. 아이폰의 홈 화면 앱은 브라우저와 기록이 따로라, 링크를 누르면 브라우저 쪽에 합쳐져요.')}</p>
+      <textarea class="input" name="link" style="height:140px" aria-label="${t('받은 글')}" placeholder="https://yeoljigi.github.io/#share=…"></textarea>`,
+    footer: `<button class="btn primary" data-go-paste>${t('읽기')}</button>` });
   $('[data-go-paste]', el).addEventListener('click', () => {
     const m = /#share=([A-Za-z0-9_-]+)/.exec($('[name=link]', el).value);
-    if (!m) { toast('기록 링크를 찾지 못했어요. 글을 통째로 붙여 넣어 주세요.'); return; }
+    if (!m) { toast(t('기록 링크를 찾지 못했어요. 글을 통째로 붙여 넣어 주세요.')); return; }
     closeSheet(true);
     receiveShare(m[1]);
   });
@@ -661,15 +685,16 @@ async function receiveShare(code) {
     raw = await share.decode(code);
     data = store.readBackup(raw);
   } catch {
-    toast('기록 링크를 읽지 못했어요. 링크가 잘렸을 수 있어요.');
+    toast(t('기록 링크를 읽지 못했어요. 링크가 잘렸을 수 있어요.'));
     return;
   }
   const kid = data.children[0];
   const n = (type) => data.entries.filter((e) => e.type === type).length;
-  const sent = raw.sentAt ? `${dayLabel(raw.sentAt).replace(/ · .*/, '')} ${clock(raw.sentAt)}에 보낸 ` : '';
-  const ios = env.iosNotInstalled() ? ' 홈 화면의 열지기에 합치려면 이 글을 닫고, 링크를 복사해 열지기 → 설정 → 「받은 기록 링크 붙여 넣기」로 넣으세요.' : '';
-  const ok = await confirmSheet({ title: '가족이 보낸 기록', ok: '합치기',
-    text: `${sent}${kid.name}의 기록이에요 — 체온 ${n('temp')} · 해열제 ${n('med')} · 증상 ${n('symptom')}건. 이 휴대폰 기록에 더해요. 지금 기록은 지우지 않아요.${ios}` });
+  const sent = raw.sentAt ? t('{day} {time}에 보낸 ', { day: dayLabel(raw.sentAt).split(' · ')[0], time: clock(raw.sentAt) }) : '';
+  const ios = env.iosNotInstalled() ? ` ${t('홈 화면의 열지기에 합치려면 이 글을 닫고, 링크를 복사해 열지기 → 설정 → 「받은 기록 링크 붙여 넣기」로 넣으세요.')}` : '';
+  const ok = await confirmSheet({ title: t('가족이 보낸 기록'), ok: t('합치기'),
+    text: `${t('{sent}{name}의 기록이에요 — 체온 {temp} · 해열제 {med} · 증상 {sym}건. 이 휴대폰 기록에 더해요. 지금 기록은 지우지 않아요.',
+      { sent, name: kid.name, temp: n('temp'), med: n('med'), sym: n('symptom') })}${ios}` });
   if (!ok) return;
   try {
     const r = store.mergeData(raw);
@@ -677,7 +702,7 @@ async function receiveShare(code) {
     toast(mergedText(r));
     go('home');
   } catch {
-    toast('기록을 합치지 못했어요.');
+    toast(t('기록을 합치지 못했어요.'));
   }
 }
 
@@ -686,17 +711,17 @@ function exportBackup() {
   const a = document.createElement('a');
   const d = new Date();
   a.href = URL.createObjectURL(blob);
-  a.download = `열지기-백업-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
+  a.download = t('열지기-백업-{date}.json', { date: `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}` });
   document.body.append(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  toast('백업 파일을 저장했어요.');
+  toast(t('백업 파일을 저장했어요.'));
 }
 
 // ── 시작 ───────────────────────────────────
 store.load();
 applyTheme();
-store.subscribe(() => { render(); notify.reschedule(); });
+store.subscribe(() => { applyTheme(); render(); notify.reschedule(); });
 env.init(render);
 render();
 notify.reschedule();

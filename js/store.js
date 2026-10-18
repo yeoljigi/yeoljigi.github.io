@@ -42,7 +42,7 @@ const REMOVED_MAX = 3000;
 
 function blank() {
   return { schema: SCHEMA, children: [], meds: DEFAULT_MEDS.map((m) => ({ ...m })), entries: [], removed: {},
-    settings: { activeChildId: null, theme: 'system', notify: false, site: '귀', text: 'md' } };
+    settings: { activeChildId: null, theme: 'system', notify: false, site: '귀', text: 'md', lang: 'auto' } };
 }
 
 export const uid = (prefix = 'e') => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -149,6 +149,7 @@ export function normalize(data) {
   if (!['system', 'light', 'dark'].includes(out.settings.theme)) out.settings.theme = 'system';
   out.settings.notify = Boolean(out.settings.notify);
   if (!TEXT_SIZES[out.settings.text]) out.settings.text = 'md';
+  if (!['auto', 'ko', 'en'].includes(out.settings.lang)) out.settings.lang = 'auto';
   if (!out.children.some((c) => c.id === out.settings.activeChildId)) {
     out.settings.activeChildId = out.children[0] ? out.children[0].id : null;
   }
@@ -259,7 +260,7 @@ export function readBackup(raw) {
 /** 백업 파일로 바꾼다 — 지금 기록을 지우고 파일의 것으로. */
 export function importJson(text) {
   const data = readBackup(JSON.parse(text));
-  data.settings = { ...data.settings, text: state.settings.text };   // 글자 크기는 이 휴대폰의 것
+  data.settings = { ...data.settings, text: state.settings.text, lang: state.settings.lang };   // 글자 크기 · 말은 이 휴대폰의 것
   state = data;
   save();
   return { children: data.children.length, entries: data.entries.length };

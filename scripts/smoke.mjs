@@ -1,7 +1,7 @@
 // 연기 시험 — 진짜 Chrome(headless)으로 화면 넷 · 기록 창 · 도움말 창을 모두 열어 보고, 스크립트 오류가 하나라도 나면 실패.
 // 의존성 없음: Node 의 http 서버 + 내장 WebSocket 으로 Chrome DevTools Protocol 을 직접 부른다.
 //   npm run smoke            (CHROME=크롬 실행 파일 경로 로 바꿀 수 있다)
-//   SHOTS=폴더 npm run smoke  홈 · 설정을 밝게/어둡게 · 글자 크기마다 찍어 둔다(390px 화면 확인용)
+//   SHOTS=폴더 npm run smoke  홈 · 설정을 밝게/어둡게 · 글자 크기 · 한국어/영어마다 찍어 둔다(390px 화면 확인용)
 
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -126,17 +126,21 @@ try {
   for (let i = 0; i < 3; i += 1) await click(`[data-calc-med]:nth-of-type(${i + 1})`, `약 안내 ${i + 1}번째 약`);
 
   if (process.env.SHOTS) {
-    for (const theme of ['light', 'dark']) {
-      for (const text of ['md', 'xl']) {
-        await evaluate(`(async () => { const s = await import('./js/store.js'); s.setSetting('theme', '${theme}'); s.setSetting('text', '${text}'); })()`);
-        for (const view of ['home', 'settings']) {
-          await open();
-          await click(`[data-view=${view}]`);
-          await shot(`${view}-${theme}-${text}`);
+    for (const lang of ['ko', 'en']) {
+      for (const theme of ['light', 'dark']) {
+        for (const text of ['md', 'xl']) {
+          await evaluate(`(async () => { const s = await import('./js/store.js'); s.setSetting('theme', '${theme}'); s.setSetting('text', '${text}');
+            s.setSetting('lang', '${lang}'); })()`);
+          for (const view of ['home', 'settings']) {
+            await open();
+            await click(`[data-view=${view}]`);
+            await shot(`${view}-${theme}-${text}${lang === 'en' ? '-en' : ''}`);
+          }
         }
       }
     }
-    await evaluate(`(async () => { const s = await import('./js/store.js'); s.setSetting('theme', 'light'); s.setSetting('text', 'md'); })()`);
+    await evaluate(`(async () => { const s = await import('./js/store.js'); s.setSetting('theme', 'light'); s.setSetting('text', 'md');
+      s.setSetting('lang', 'ko'); })()`);
   }
 
   // 기록 링크 — 만들어 지운 뒤 그 링크로 열면 「가족이 보낸 기록」을 묻고, 합치면 돌아온다
@@ -153,6 +157,43 @@ try {
   const temps = await evaluate(`(async () => (await import('./js/store.js')).get().entries.filter((e) => e.type === 'temp').length)()`);
   if (temps !== 1) errors.push(`합친 뒤 체온 기록 ${temps}건(1건이어야)`);
   if (await evaluate(`location.hash !== ''`)) errors.push('합친 뒤에도 주소에 기록 링크가 남음');
+
+  // 영어 — 화면 넷 · 창마다 한국어가 남지 않는다(포장의 한국어 이름처럼 lang="ko" 로 둔 곳 · 사람이 넣은 값은 빼고)
+  await evaluate(`(async () => { const s = await import('./js/store.js'); const kid = s.get().children[0];
+    s.saveChild({ ...kid, name: 'Test', note: 'none' }); s.setSetting('lang', 'en'); })()`);
+  const hangul = (where) => evaluate(`(() => { const out = []; const ko = /[가-힣]/;
+    const skip = (el) => el.closest('[lang=ko], script, style, noscript');
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (ko.test(n.textContent) && !skip(n.parentElement)) out.push(n.textContent.trim());
+    for (const el of document.querySelectorAll('[aria-label], [placeholder], [title]')) {
+      for (const a of ['aria-label', 'placeholder', 'title']) if (ko.test(el.getAttribute(a) || '') && !skip(el)) out.push(a + '=' + el.getAttribute(a));
+    }
+    for (const el of document.querySelectorAll('input, textarea')) if (ko.test(el.value) && !skip(el)) out.push('value=' + el.value.slice(0, 40));
+    if (ko.test(document.title)) out.push('title=' + document.title);
+    return out.slice(0, 3).map((t) => ${JSON.stringify('')} + t.slice(0, 60)); })()`).then((left) => {
+    if (left?.length) errors.push(`영어 화면(${where})에 한국어: ${left.join(' | ')}`);
+  });
+  if (await evaluate(`document.documentElement.lang`) !== 'en') errors.push('영어로 바꿨는데 <html lang> 이 en 이 아님');
+  for (const view of ['home', 'log', 'calc', 'settings']) {
+    await open();
+    await click(`[data-view=${view}]`, `탭 ${view}`);
+    await hangul(view);
+    await shot(`en-${view}`);
+  }
+  for (const [view, selector] of [...sheets, ['', '[data-share]'], ['settings', '[data-edit-kid]']]) {
+    if (selector.includes('data-text-set')) continue;
+    await open();
+    if (view) await click(`[data-view=${view}]`);
+    await click(selector);
+    await hangul(selector);
+  }
+  await open();
+  await click('[data-share]');
+  await click('[data-text-lang=ko]', '요약 한국어 단추');
+  if (!(await evaluate(`/최근 72시간 기록/.test(document.querySelector('.sheet textarea').value)`))) errors.push('영어 화면에서 요약을 한국어로 바꾸지 못함');
+  await evaluate(`(async () => (await import('./js/store.js')).setSetting('lang', 'ko'))()`);
+  await open();
+  if (await evaluate(`document.querySelector('[data-view=home] span').textContent`) !== '홈') errors.push('한국어로 되돌리지 못함');
 } catch (err) {
   errors.push(String(err && err.message || err));
 } finally {
@@ -167,5 +208,5 @@ if (failed) {
   console.error(`연기 시험 실패 — ${errors.length}건\n${errors.map((e) => `- ${e}`).join('\n')}`);
   process.exit(1);
 }
-console.log('연기 시험 통과 — 화면 넷 · 기록 창 · 도움말 창 · 기록 링크 합치기에서 스크립트 오류 없음');
+console.log('연기 시험 통과 — 화면 넷 · 기록 창 · 도움말 창 · 기록 링크 합치기 · 영어에서 스크립트 오류 없음');
 process.exit(0);

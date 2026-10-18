@@ -1,5 +1,7 @@
 // 화면 도우미 — 글자 이스케이프 · 시간 표시 · 아래 창 · 토스트 · 아이콘.
 
+import { isEn, t } from './i18n.js';
+
 export const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
@@ -9,40 +11,59 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── 시간 ────────────────────────────────────
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+const WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function clock(at) {
   const d = new Date(at);
   const h = d.getHours();
   const m = String(d.getMinutes()).padStart(2, '0');
+  if (isEn()) return `${h % 12 || 12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
   return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${m}`;
 }
 
-export function dayLabel(at, now = new Date()) {
+/** 좁은 칸(기록 줄)의 날짜 · 시각 — 10/17 3:05(영어는 3:05p) */
+export function shortStamp(at) {
   const d = new Date(at);
-  const key = (x) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const h = d.getHours();
+  const time = `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${time}${isEn() ? (h < 12 ? 'a' : 'p') : ''}`;
+}
+
+/** 10월 18일 (토) · Oct 18 (Sat) */
+export function dateLabel(at) {
+  const d = new Date(at);
+  return isEn() ? `${MONTH_EN[d.getMonth()]} ${d.getDate()} (${WEEK_EN[d.getDay()]})`
+    : `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
+}
+
+const dayKey = (x) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+export const isToday = (at, now = new Date()) => dayKey(new Date(at)) === dayKey(new Date(now));
+
+export function dayLabel(at, now = new Date()) {
   const y = new Date(now); y.setDate(y.getDate() - 1);
-  const base = `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
-  if (key(d) === key(now)) return `오늘 · ${base}`;
-  if (key(d) === key(y)) return `어제 · ${base}`;
+  const base = dateLabel(at);
+  if (isToday(at, now)) return `${t('오늘')} · ${base}`;
+  if (dayKey(new Date(at)) === dayKey(y)) return `${t('어제')} · ${base}`;
   return base;
 }
 
 export function ago(at, now = new Date()) {
   const mins = Math.round((new Date(now) - new Date(at)) / 60000);
-  if (mins < 1) return '방금';
-  if (mins < 60) return `${mins}분 전`;
+  if (mins < 1) return t('방금');
+  if (mins < 60) return t('{n}분 전', { n: mins });
   const h = Math.floor(mins / 60);
-  if (h < 24) return `${h}시간${mins % 60 && h < 6 ? ` ${mins % 60}분` : ''} 전`;
-  return `${Math.floor(h / 24)}일 전`;
+  if (h < 24) return mins % 60 && h < 6 ? t('{h}시간 {m}분 전', { h, m: mins % 60 }) : t('{h}시간 전', { h });
+  return t('{n}일 전', { n: Math.floor(h / 24) });
 }
 
 /** 그 뒤로 지난 시간 — 내림(실제보다 길게 말하지 않게). 이틀이 넘으면 날로. */
 export function elapsed(at, now = new Date()) {
   const mins = Math.max(0, Math.floor((new Date(now) - new Date(at)) / 60000));
-  if (mins < 60) return `${mins}분`;
+  if (mins < 60) return t('{n}분', { n: mins });
   const h = Math.floor(mins / 60);
-  if (h >= 48) return `${Math.floor(h / 24)}일`;
-  return `${h}시간${mins % 60 ? ` ${mins % 60}분` : ''}`;
+  if (h >= 48) return t('{n}일', { n: Math.floor(h / 24) });
+  return mins % 60 ? t('{h}시간 {m}분', { h, m: mins % 60 }) : t('{h}시간', { h });
 }
 
 /** <input type="datetime-local"> 값 ↔ Date */
@@ -107,7 +128,7 @@ export function sheet({ title, body, footer = '', onOpen, label, onClose }) {
   el.setAttribute('aria-modal', 'true');
   el.setAttribute('aria-label', label || title);
   el.innerHTML = `<div class="grab" aria-hidden="true"></div>
-    <header><h3>${esc(title)}</h3><button class="icon-btn" data-close aria-label="닫기">${icon('close')}</button></header>
+    <header><h3>${esc(title)}</h3><button class="icon-btn" data-close aria-label="${esc(t('닫기'))}">${icon('close')}</button></header>
     <div class="sheet-body">${body}</div>${footer ? `<footer>${footer}</footer>` : ''}`;
   document.body.append(scrim, el);
   const back = document.activeElement;
@@ -159,8 +180,8 @@ export async function shareText(text) {
   if (navigator.share) {
     try { await navigator.share({ text }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
   }
-  try { await navigator.clipboard.writeText(text); toast('복사했어요. 카카오톡 대화방에 붙여 넣으세요.'); } catch {
-    toast('보내지 못했어요. 진료용 요약에서 복사해 주세요.');
+  try { await navigator.clipboard.writeText(text); toast(t('복사했어요. 카카오톡 대화방에 붙여 넣으세요.')); } catch {
+    toast(t('보내지 못했어요. 진료용 요약에서 복사해 주세요.'));
   }
 }
 
@@ -175,17 +196,17 @@ export async function shareFile(file) {
   document.body.append(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  toast('그림을 저장했어요.');
+  toast(t('그림을 저장했어요.'));
 }
 
-export function confirmSheet({ title, text, ok = '확인', danger = false }) {
+export function confirmSheet({ title, text, ok = t('확인'), danger = false }) {
   return new Promise((resolve) => {
     let done = false;
     const el = sheet({
       onClose: () => { if (!done) { done = true; resolve(false); } },
       title,
       body: `<p class="muted" style="margin:0">${esc(text)}</p>`,
-      footer: `<button class="btn" data-no>취소</button><button class="btn ${danger ? 'danger' : 'primary'}" data-yes>${esc(ok)}</button>`,
+      footer: `<button class="btn" data-no>${esc(t('취소'))}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-yes>${esc(ok)}</button>`,
     });
     const finish = (v) => { if (!done) { done = true; resolve(v); closeSheet(); } };
     el.querySelector('[data-no]').addEventListener('click', () => finish(false));

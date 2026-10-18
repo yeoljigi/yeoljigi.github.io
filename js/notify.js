@@ -5,6 +5,7 @@
 // 뒤에 남아 있는 동안만 울린다고 화면에 그대로 적는다.
 
 import { HOUR } from './dose.js';
+import { t } from './i18n.js';
 import * as store from './store.js';
 import { toast } from './ui.js';
 
@@ -52,7 +53,9 @@ export function reschedule() {
     if (lastMed) {
       const recheck = new Date(new Date(lastMed.at).getTime() + RECHECK_MIN * 60000);
       const measuredAfter = history.some((e) => e.type === 'temp' && e.at > lastMed.at);
-      if (!measuredAfter) plan(recheck, `recheck-${child.id}`, `${child.name} 체온 재기`, '해열제를 먹인 지 1시간 — 체온을 다시 재 보세요.');
+      if (!measuredAfter) {
+        plan(recheck, `recheck-${child.id}`, t('{name} 체온 재기', { name: child.name }), t('해열제를 먹인 지 1시간 — 체온을 다시 재 보세요.'));
+      }
     }
   }
 }

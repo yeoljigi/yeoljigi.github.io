@@ -3,6 +3,7 @@
 import {
   DAY, GROUPS, HOUR, INGREDIENTS, ONE_TAP_TAGS, URINE_TAG, WATER_TAG, ageLabel, ageMonths, feverEpisode, groupLog, lastUrine,
 } from './dose.js';
+import { name, t } from './i18n.js';
 import { WELLBEING } from './store.js';
 import { clock, fmt1, fmtAmount } from './ui.js';
 
@@ -19,41 +20,43 @@ export function summary(child, entries, now = new Date(), hours = 72) {
   const symptoms = recent.filter((e) => e.type === 'symptom' && !oneTap(e));
   const lines = [];
   const age = ageLabel(ageMonths(child.birth, now));
-  const wb = (e) => WELLBEING[Number(e.wellbeing) - 1] || '';
-  lines.push(`[${child.name}${age ? ` · ${age}` : ''}${child.weight ? ` · ${child.weight}kg` : ''}] 최근 ${hours}시간 기록`);
+  const wb = (e) => t(WELLBEING[Number(e.wellbeing) - 1] || '');
+  lines.push(`[${child.name}${age ? ` · ${age}` : ''}${child.weight ? ` · ${child.weight}kg` : ''}] ${t('최근 {h}시간 기록', { h: hours })}`);
 
-  if (child.seizure) lines.push('열성 경련 과거력 있음');
-  if (child.note) lines.push(`참고: ${child.note}`);
+  if (child.seizure) lines.push(t('열성 경련 과거력 있음'));
+  if (child.note) lines.push(t('참고: {note}', { note: child.note }));
   const ep = feverEpisode(entries, now);
-  if (ep) lines.push(`열 시작: ${stamp(ep.start)} (${Math.max(1, Math.round(ep.hours))}시간째)`);
+  if (ep) lines.push(t('열 시작: {at} ({h}시간째)', { at: stamp(ep.start), h: Math.max(1, Math.round(ep.hours)) }));
   if (temps.length) {
     const max = temps.reduce((m, e) => (Number(e.temp) > Number(m.temp) ? e : m));
-    lines.push(`최고 체온: ${fmt1(max.temp)}℃ (${stamp(max.at)}) · 마지막: ${fmt1(temps[temps.length - 1].temp)}℃ (${stamp(temps[temps.length - 1].at)})`);
+    const last = temps[temps.length - 1];
+    lines.push(t('최고 체온: {max}℃ ({maxAt}) · 마지막: {last}℃ ({lastAt})',
+      { max: fmt1(max.temp), maxAt: stamp(max.at), last: fmt1(last.temp), lastAt: stamp(last.at) }));
   } else {
-    lines.push('체온 기록 없음');
+    lines.push(t('체온 기록 없음'));
   }
-  if (pees.length) lines.push(`소변 ${pees.length}번 · 마지막 ${stamp(pees[pees.length - 1].at)}`);
-  if (drinks.length) lines.push(`물 마심 ${drinks.length}번 · 마지막 ${stamp(drinks[drinks.length - 1].at)}`);
+  if (pees.length) lines.push(t('소변 {n}번 · 마지막 {at}', { n: pees.length, at: stamp(pees[pees.length - 1].at) }));
+  if (drinks.length) lines.push(t('물 마심 {n}번 · 마지막 {at}', { n: drinks.length, at: stamp(drinks[drinks.length - 1].at) }));
 
   if (meds.length) {
-    lines.push('', `해열제 ${meds.length}번`);
+    lines.push('', t('해열제 {n}번', { n: meds.length }));
     for (const m of meds) {
       const ing = INGREDIENTS[m.ingredient];
-      lines.push(`- ${stamp(m.at)} ${m.name || ing?.name} ${fmtAmount(m.amount)}${m.unit || 'mL'} (${ing?.name || ''} ${m.mg}mg)`);
+      lines.push(`- ${stamp(m.at)} ${name(m.name) || t(ing?.name || '')} ${fmtAmount(m.amount)}${unitOf(m)} (${t(ing?.name || '')} ${m.mg}mg)`);
     }
   }
   if (temps.length) {
-    lines.push('', '체온');
-    for (const t of temps) {
-      const note = [t.site, wb(t)].filter(Boolean).join(' · ');
-      lines.push(`- ${stamp(t.at)} ${fmt1(t.temp)}℃${note ? ` (${note})` : ''}`);
+    lines.push('', t('체온'));
+    for (const e of temps) {
+      const note = [t(e.site || ''), wb(e)].filter(Boolean).join(' · ');
+      lines.push(`- ${stamp(e.at)} ${fmt1(e.temp)}℃${note ? ` (${note})` : ''}`);
     }
   }
   if (symptoms.length) {
-    lines.push('', '증상');
-    for (const s of symptoms) lines.push(`- ${stamp(s.at)} ${(s.tags || []).join(', ')}${s.memo ? ` — ${s.memo}` : ''}`);
+    lines.push('', t('증상'));
+    for (const s of symptoms) lines.push(`- ${stamp(s.at)} ${(s.tags || []).map((x) => t(x)).join(', ')}${s.memo ? ` — ${s.memo}` : ''}`);
   }
-  lines.push('', '열지기 앱 기록');
+  lines.push('', t('열지기 앱 기록'));
   return lines.join('\n');
 }
 
@@ -63,21 +66,25 @@ export function summary(child, entries, now = new Date(), hours = 72) {
  */
 export function doseMessage(child, entry, history, now = new Date()) {
   const ing = INGREDIENTS[entry.ingredient];
-  const lines = [`[${child.name}] ${stamp(entry.at)} ${entry.name || ing.name} ${fmtAmount(entry.amount)}${entry.unit || 'mL'} 먹였어요`
-    + ` (${ing.name} ${entry.mg}mg)`];
+  const lines = [`[${child.name}] ${t('{at} {med} {amount} 먹였어요', {
+    at: stamp(entry.at), med: name(entry.name) || t(ing.name), amount: `${fmtAmount(entry.amount)}${unitOf(entry)}` })}`
+    + ` (${t(ing.name)} ${entry.mg}mg)`];
   const temp = history.filter((e) => e.type === 'temp' && new Date(e.at) <= now).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
-  if (temp && now - new Date(temp.at) < 12 * HOUR) lines.push(`마지막 체온 ${fmt1(temp.temp)}℃ (${stamp(temp.at)})`);
-  lines.push('', '계열마다 마지막으로 먹인 때');
+  if (temp && now - new Date(temp.at) < 12 * HOUR) lines.push(t('마지막 체온 {temp}℃ ({at})', { temp: fmt1(temp.temp), at: stamp(temp.at) }));
+  lines.push('', t('계열마다 마지막으로 먹인 때'));
   for (const g of Object.values(GROUPS)) {
     const l = groupLog(g.key, history, now);
-    lines.push(`- ${g.name}: ${l.last ? `${stamp(l.last.at)} (24시간 ${l.countInDay}번)` : '기록 없음'}`);
+    lines.push(`- ${t(g.name)}: ${l.last ? t('{at} (24시간 {n}번)', { at: stamp(l.last.at), n: l.countInDay }) : t('기록 없음')}`);
   }
-  lines.push('다음 약은 포장 설명서의 간격을 확인하고 먹여 주세요.');
+  lines.push(t('다음 약은 포장 설명서의 간격을 확인하고 먹여 주세요.'));
   const pee = lastUrine(history, now);
-  if (pee && now - new Date(pee.at) < DAY) lines.push(`마지막 소변 ${stamp(pee.at)}`);
-  lines.push('', `${stamp(now)} 기록 기준 · 열지기`);
+  if (pee && now - new Date(pee.at) < DAY) lines.push(t('마지막 소변 {at}', { at: stamp(pee.at) }));
+  lines.push('', t('{at} 기록 기준 · 열지기', { at: stamp(now) }));
   return lines.join('\n');
 }
+
+// 약 단위 — 저장은 mL · 개, 영어로는 개 → pc
+const unitOf = (e) => t(e.unit || 'mL');
 
 function stamp(at) {
   const d = new Date(at);

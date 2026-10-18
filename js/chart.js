@@ -1,6 +1,7 @@
 // 체온 그래프 — SVG 를 직접 그린다(인터넷 없이). 열 구간 띠 · 체온 선 · 해열제 표시 · 지금 선.
 
 import { HOUR, INGREDIENTS, feverLevel } from './dose.js';
+import { isEn, name, t } from './i18n.js';
 import { clock, esc } from './ui.js';
 
 const W = 340;
@@ -17,12 +18,15 @@ const BANDS = [
 ];
 
 export function tempChart(entries, opts = {}) {
-  return `${chartSvg(entries, opts)}${LEGEND}`;
+  return `${chartSvg(entries, opts)}${legend()}`;
 }
 
-const LEGEND = `<div class="legend"><span><i style="background:var(--apap)"></i>아세트아미노펜</span>
-    <span><i style="background:var(--nsaid)"></i>이부프로펜 계열</span>
-    <span><i style="background:var(--fever-soft);outline:1px solid var(--fever)"></i>38℃ 이상</span></div>`;
+const legend = () => `<div class="legend"><span><i style="background:var(--apap)"></i>${esc(t('아세트아미노펜'))}</span>
+    <span><i style="background:var(--nsaid)"></i>${esc(t('이부프로펜 계열'))}</span>
+    <span><i style="background:var(--fever-soft);outline:1px solid var(--fever)"></i>${esc(t('38℃ 이상'))}</span></div>`;
+
+// 시간 눈금 — 6시 · 6AM
+const hourLabel = (h) => (isEn() ? `${h % 12 || 12}${h < 12 ? 'AM' : 'PM'}` : `${h}시`);
 
 function chartSvg(entries, { hours = 24, now = new Date() } = {}) {
   const end = now.getTime() + hours * HOUR * 0.04;
@@ -50,7 +54,7 @@ function chartSvg(entries, { hours = 24, now = new Date() } = {}) {
   for (let t = first.getTime(); t <= end; t += step * HOUR) {
     const d = new Date(t);
     const label = step === 24 ? `${d.getMonth() + 1}/${d.getDate()}` : (d.getHours() === 0 ? `${d.getMonth() + 1}/${d.getDate()}`
-      : `${d.getHours()}시`);
+      : hourLabel(d.getHours()));
     ticks.push(`<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${PAD.t}" y2="${H - PAD.b}" stroke-dasharray="2 4"/>
       <text class="axis" x="${x(t)}" y="${H - PAD.b + 13}" text-anchor="middle">${label}</text>`);
   }
@@ -70,17 +74,18 @@ function chartSvg(entries, { hours = 24, now = new Date() } = {}) {
     const mx = x(new Date(e.at).getTime());
     return `<g><line class="medmark" x1="${mx}" x2="${mx}" y1="${PAD.t}" y2="${H - PAD.b}" stroke="${color}" stroke-opacity=".35"/>
       <rect x="${mx - 5}" y="${medY - 5}" width="10" height="10" rx="3" fill="${color}">
-      <title>${esc(clock(e.at))} ${esc(e.name || '')}</title></rect></g>`;
+      <title>${esc(clock(e.at))} ${esc(name(e.name))}</title></rect></g>`;
   }).join('');
 
   const nowX = x(now.getTime());
   const empty = !temps.length && !meds.length
-    ? `<text class="axis" x="${(PAD.l + W - PAD.r) / 2}" y="${(PAD.t + H - PAD.b) / 2}" text-anchor="middle" font-size="12">이 기간의 기록이 없어요</text>`
+    ? `<text class="axis" x="${(PAD.l + W - PAD.r) / 2}" y="${(PAD.t + H - PAD.b) / 2}" text-anchor="middle" font-size="12">${esc(t('이 기간의 기록이 없어요'))}</text>`
     : '';
 
   const summary = temps.length
-    ? `최근 ${hours}시간 체온 ${temps.length}번, 가장 높은 ${Math.max(...temps.map((e) => Number(e.temp))).toFixed(1)}도, 해열제 ${meds.length}번`
-    : `최근 ${hours}시간 기록 없음`;
+    ? t('최근 {h}시간 체온 {n}번, 가장 높은 {max}도, 해열제 {meds}번',
+      { h: hours, n: temps.length, max: Math.max(...temps.map((e) => Number(e.temp))).toFixed(1), meds: meds.length })
+    : t('최근 {h}시간 기록 없음', { h: hours });
 
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(summary)}">
     ${bands}${grid}${ticks.join('')}
@@ -106,12 +111,12 @@ export async function chartImage(entries, { hours = 72, now = new Date(), title 
   const before = rootEl.getAttribute('data-theme');
   rootEl.setAttribute('data-theme', 'light');
   const css = getComputedStyle(rootEl);
-  const color = (name) => css.getPropertyValue(`--${name}`).trim() || '#888';
-  const paint = (text) => text.replace(/var\(--([a-z0-9-]+)\)/g, (m, name) => color(name));
+  const color = (token) => css.getPropertyValue(`--${token}`).trim() || '#888';
+  const paint = (text) => text.replace(/var\(--([a-z0-9-]+)\)/g, (m, token) => color(token));
   const style = paint(CHART_STYLE);
   const chart = paint(chartSvg(entries, { hours, now })).replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
   const bg = color('surface');
-  const legend = [['apap', '아세트아미노펜'], ['nsaid', '이부프로펜 계열']]
+  const keys = [['apap', t('아세트아미노펜')], ['nsaid', t('이부프로펜 계열')]]
     .map(([k, label], i) => `<rect x="${12 + i * 110}" y="268" width="10" height="10" rx="3" fill="${color(k)}"/>
       <text class="s" x="${26 + i * 110}" y="277">${esc(label)}</text>`).join('');
   if (before === null) rootEl.removeAttribute('data-theme'); else rootEl.setAttribute('data-theme', before);
@@ -121,8 +126,8 @@ export async function chartImage(entries, { hours = 72, now = new Date(), title 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <style>${style}</style><rect width="${w}" height="${h}" fill="${bg}"/>
     <text class="t" x="12" y="24">${esc(title)}</text>
-    <text class="s" x="12" y="42">${esc(stamp(now.getTime() - hours * HOUR))} ~ ${esc(stamp(now))} · 최근 ${hours}시간 · 열지기</text>
-    <g transform="translate(0 56)">${chart}</g>${legend}</svg>`;
+    <text class="s" x="12" y="42">${esc(stamp(now.getTime() - hours * HOUR))} ~ ${esc(stamp(now))} · ${esc(t('최근 {h}시간 · 열지기', { h: hours }))}</text>
+    <g transform="translate(0 56)">${chart}</g>${keys}</svg>`;
 
   const img = new Image();
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
