@@ -123,7 +123,10 @@ try {
   }
   await open();
   await click('[data-view=calc]');
-  for (let i = 0; i < 3; i += 1) await click(`[data-calc-med]:nth-of-type(${i + 1})`, `약 안내 ${i + 1}번째 약`);
+  for (let i = 0; i < 3; i += 1) {
+    await click(`[data-calc-med]:nth-of-type(${i + 1})`, `약 안내 ${i + 1}번째 약`);
+    await shot(`calc-${i + 1}`);
+  }
 
   if (process.env.SHOTS) {
     for (const lang of ['ko', 'en']) {

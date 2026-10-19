@@ -222,6 +222,16 @@ function logView() {
 // 설명서의 용법을 옮겨 보여 줄 뿐, 아이 체중 · 나이로 양을 셈하지 않는다(dose.js 머리말).
 const yearsLabel = (r) => t('{a}~{b}세', { a: r.fromM / 12, b: r.toM / 12 - 1 });
 
+// 설명서 나이 · 몸무게별 표(아세트아미노펜 · 덱시부프로펜) — 함량이 표와 같으면 설명서 mL 그대로, 다르면 이 약 함량으로 바꾼다
+const tableAge = (r) => (r.m ? t('{a}~{b}개월', { a: r.m[0], b: r.m[1] })
+  : r.y.length > 1 ? t('{a}~{b}세', { a: r.y[0], b: r.y[1] }) : t('{y}세', { y: r.y[0] }));
+const tableKg = (r) => (r.kg.length > 1 ? `${r.kg[0]}~${r.kg[1]}kg` : t('{kg}kg 이상', { kg: r.kg[0] }));
+function tableMl(med, ing, r) {
+  if (med.unit !== 'mL') return '';
+  const mL = med.conc === ing.tableConc ? r.mL : r.mg.map((mg) => Math.round((mg / med.conc) * 10) / 10);
+  return `<br><span class="faint">${t('이 약 {a}mL', { a: mL.map(fmtAmount).join('~') })}</span>`;
+}
+
 function labelOutput(med, months) {
   if (!med) return `<p class="muted" style="text-align:center;margin:8px 0">${t('설정 → 내 약에서 약을 더해 주세요.')}</p>`;
   const ing = INGREDIENTS[med.ingredient];
@@ -239,7 +249,11 @@ function labelOutput(med, months) {
   const table = ing.ageTable ? `<table class="label-table"><thead><tr><th>${t('나이')}</th><th>${t('1회')}</th><th>${t('하루 최대')}</th></tr></thead><tbody>
       ${ing.ageTable.map((r) => `<tr><td>${yearsLabel(r)}</td><td class="num">${r.singleMin}~${r.single}mg${inUnit(r)}</td>
         <td class="num">${r.day}mg</td></tr>`).join('')}</tbody></table>
-      <p class="small muted" style="margin:6px 0 0">${t('표에 없는 나이(돌 전 등)는 의사 · 약사와 상의하세요.')}</p>` : '';
+      <p class="small muted" style="margin:6px 0 0">${t('표에 없는 나이(돌 전 등)는 의사 · 약사와 상의하세요.')}</p>`
+    : ing.labelTable ? `<table class="label-table"><thead><tr><th>${t('나이')}</th><th>${t('몸무게')}</th><th>${t('1회')}</th></tr></thead><tbody>
+      ${ing.labelTable.map((r) => `<tr><td>${tableAge(r)}</td><td class="num">${tableKg(r)}</td>
+        <td class="num">${r.mg.join('~')}mg${tableMl(med, ing, r)}</td></tr>`).join('')}</tbody></table>
+      <p class="small muted" style="margin:6px 0 0">${t('포장 설명서의 나이 · 몸무게별 표예요. 설명서는 몸무게를 알면 몸무게 쪽을 보라고 적고 있어요. 표에 없는 나이 · 몸무게는 의사 · 약사와 상의하세요.')}</p>` : '';
   return `${notice ? `<div class="check warn">${esc(notice)}</div>` : ''}
     <dl class="kv"><dt>${t('함량')}</dt><dd>${esc(t(ing.name))} ${esc(unitText)}</dd>
       <dt>${t('1회')}</dt><dd>${esc(t(ing.label.single))}</dd>

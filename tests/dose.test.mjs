@@ -105,14 +105,24 @@ test('계열 기록 모아 보기 — 마지막 · 지난 시간 · 24시간 횟
   assert.equal(Object.hasOwn(apap, 'at') || Object.hasOwn(apap, 'canNow'), false, '다음 시각을 내지 않는다');
 });
 
-test('설명서 내용 — 허가 문구 · 이부프로펜 나이별 표', () => {
+test('설명서 내용 — 허가 문구 · 나이별 · 몸무게별 표', () => {
   assert.match(INGREDIENTS.acetaminophen.label.single, /10~15mg/);
   assert.match(INGREDIENTS.acetaminophen.label.day, /5번까지 .*75mg/);
   assert.match(INGREDIENTS.dexibuprofen.label.day, /30kg 이하는 300mg/);
   // 어린이부루펜시럽 허가 나이별 표(1~2세 50~100mg · 400mg … 11~14세 200~250mg · 1000mg)
   assert.deepEqual(INGREDIENTS.ibuprofen.ageTable.map((r) => [r.singleMin, r.single, r.day]),
     [[50, 100, 400], [100, 150, 600], [150, 200, 800], [200, 250, 1000]]);
+  // 세토펜 · 콜대원키즈펜(32mg/mL) 나이 · 몸무게별 1회 표, 맥시부펜 · 애니펜(12mg/mL) 표 — mL 은 원문 그대로
+  assert.deepEqual(INGREDIENTS.acetaminophen.labelTable.map((r) => [r.mg[0], r.mL[0]]),
+    [[80, 2.5], [120, 3.5], [160, 5], [240, 7.5], [320, 10], [400, 12.5], [480, 15], [640, 20]]);
+  assert.deepEqual(INGREDIENTS.dexibuprofen.labelTable.map((r) => [...r.mg, ...r.mL]),
+    [[40, 70, 3, 6], [50, 80, 4, 7], [60, 110, 5, 9], [80, 145, 7, 12], [105, 210, 9, 17], [150, 265, 12.5, 22],
+      [190, 300, 16, 25], [215, 300, 18, 25]]);
   for (const ing of Object.values(INGREDIENTS)) {
+    for (const r of ing.labelTable || []) {
+      // 원문 mL 은 표 함량으로 바꾼 값과 1mL 안쪽(설명서 반올림)
+      r.mg.forEach((mg, i) => assert.ok(Math.abs(mg / ing.tableConc - r.mL[i]) < 1, `${ing.name} ${mg}mg`));
+    }
     assert.ok(ing.label && ing.label.single && ing.label.day && ing.label.interval, ing.name);
     assert.ok(ing.minIntervalH > 0 && ing.maxPerDay > 0, ing.name);
   }

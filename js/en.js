@@ -85,6 +85,12 @@ export const EN = {
   '1회': 'Per dose',
   '하루 최대': 'Daily max',
   '표에 없는 나이(돌 전 등)는 의사 · 약사와 상의하세요.': 'For ages not in the table (such as under 1), ask a doctor or pharmacist.',
+  '몸무게': 'Weight',
+  '{a}~{b}개월': '{a}–{b} months',
+  '{kg}kg 이상': '{kg}kg or more',
+  '이 약 {a}mL': 'This medicine: {a}mL',
+  '포장 설명서의 나이 · 몸무게별 표예요. 설명서는 몸무게를 알면 몸무게 쪽을 보라고 적고 있어요. 표에 없는 나이 · 몸무게는 의사 · 약사와 상의하세요.':
+    'This is the age and weight table from the package leaflet. The leaflet says to go by weight when you know it. For ages or weights not in the table, ask a doctor or pharmacist.',
   '간격': 'Interval',
   '하루': 'Per day',
   '이 약은 하루 {n}번까지(내 약 설정)': 'this medicine up to {n} a day (My medicines)',
