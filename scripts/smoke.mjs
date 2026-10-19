@@ -32,6 +32,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const profile = await mkdtemp(join(tmpdir(), 'yeoljigi-smoke-'));
 // 포트 0 — Chrome 이 빈 포트를 골라 프로필 폴더의 DevToolsActivePort 에 적는다(정해 둔 포트가 겹쳐 못 뜨는 일이 없게)
 const chrome = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--remote-debugging-port=0',
+  ...(process.env.SMOKE_LANG ? [`--lang=${process.env.SMOKE_LANG}`] : []), // SMOKE_LANG=en-US — CI 러너처럼 영어 Chrome 으로
   `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 let chromeLog = '';
 chrome.stderr.on('data', (d) => { chromeLog = (chromeLog + d).slice(-2000); });
@@ -98,6 +99,7 @@ try {
 
   // 기록이 있는 아이 하나
   await evaluate(`(async () => { const s = await import('./js/store.js');
+    s.setSetting('lang', 'ko'); // 「자동」이면 영어 Chrome(CI 러너)에서 영어로 떠 한국어 제목을 못 찾는다
     s.saveChild({ name: '시험', birth: '2023-03-02', weight: 13 });
     const kid = s.get().children[0]; const m = s.get().meds[0];
     const h = (x) => new Date(Date.now() - x * 3600e3).toISOString();
